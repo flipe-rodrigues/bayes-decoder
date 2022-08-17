@@ -50,6 +50,7 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(tensor,opt)
         x_bw = features(ff).x_bw;
 
         % kernel definition
+        padded_x_edges = 
         x_kernel = normpdf(x_edges,mean(x_bounds),x_bw);
         x_kernel = x_kernel / nansum(x_kernel);
         
@@ -64,7 +65,7 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(tensor,opt)
             x_counts = histcounts2(1:n_timepoints,X(:,train_idx)',...
                 'xbinedges',1:n_timepoints+1,...
                 'ybinedges',x_edges);
-            p_Xt(:,kk,:) = conv2(1,x_kernel,x_counts,'same');
+            p_Xt(:,kk,:) = conv2(1,x_kernel,x_counts,'valid');
         end
         
         % store average joint distribution
