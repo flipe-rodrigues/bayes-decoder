@@ -50,7 +50,6 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(tensor,opt)
         x_bw = features(ff).x_bw;
 
         % kernel definition
-        padded_x_edges = 
         x_kernel = normpdf(x_edges,mean(x_bounds),x_bw);
         x_kernel = x_kernel / nansum(x_kernel);
         
@@ -65,7 +64,7 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(tensor,opt)
             x_counts = histcounts2(1:n_timepoints,X(:,train_idx)',...
                 'xbinedges',1:n_timepoints+1,...
                 'ybinedges',x_edges);
-            p_Xt(:,kk,:) = conv2(1,x_kernel,x_counts,'valid');
+            p_Xt(:,kk,:) = conv2(1,x_kernel,x_counts,'same');
         end
         
         % store average joint distribution
@@ -141,5 +140,33 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(tensor,opt)
         % posterior mean (aka COM)
         P_tX_kk(isnan(P_tX_kk)) = 0;
         pthat.mean(test_time_flags,kk) = opt.time * P_tX_kk';
+    end
+end
+
+function progressreport(iter,n_iter,message,bar_len)
+    %UNTITLED Summary of this function goes here
+    %   Detailed explanation goes here
+    if nargin < 4
+        bar_len = 30;
+    end
+    progress = floor(iter / n_iter * 100);
+    if iter > 1
+        for jj = 1 : (length(message) + bar_len + 8)
+            fprintf('\b');
+        end
+    end
+    fprintf('|');
+    for jj = 1 : bar_len
+        if progress/(100/bar_len) >= jj
+            fprintf('#');
+        else
+            fprintf('-');
+        end
+    end
+    fprintf('| ');
+    if progress == 100
+        fprintf([message, '(%i/%i) ... done.\n']);
+    else
+        fprintf([message, ' ... ']);
     end
 end
