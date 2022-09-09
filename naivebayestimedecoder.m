@@ -27,7 +27,7 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(tensor,opt)
         X = squeeze(tensor(:,ff,:));
         
         % estimate feature span
-        x_bounds = quantile(X(:),[0,1]+[1,-1]*.01).*(1+[-1,1]*.05);
+        x_bounds = quantile(X(:),[0,1]+[1,-1]*.01).*(1+[-1,1]*.025);
         [~,x_edges] = histcounts(X(X>=x_bounds(1)&X<=x_bounds(2)),opt.n_xpoints);
         
         % update feature
