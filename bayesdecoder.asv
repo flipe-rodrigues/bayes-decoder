@@ -1,9 +1,9 @@
-function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(tensor,opt)
+function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
     %UNTITLED Summary of this function goes here
     %   Detailed explanation goes here
 
     %% input parsing
-    [n_timepoints,n_features,~] = size(tensor);
+    [n_classes,n_features,~] = size(tensor);
 
     %% output preallocation
     features = cell(n_features,1);
@@ -11,11 +11,11 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(tensor,opt)
         features{ff} = struct();
     end
     features = cell2mat(features);
-    pthat.mode = nan(n_timepoints,opt.test.n_trials);
-    pthat.median = nan(n_timepoints,opt.test.n_trials);
-    pthat.mean = nan(n_timepoints,opt.test.n_trials);
-    P_Xt = nan(n_timepoints,n_features,opt.n_xpoints);
-    P_tX = nan(n_timepoints,n_timepoints,opt.test.n_trials);
+    pthat.mode = nan(n_classes,opt.test.n_trials);
+    pthat.median = nan(n_classes,opt.test.n_trials);
+    pthat.mean = nan(n_classes,opt.test.n_trials);
+    P_Xc = nan(n_classes,n_features,opt.n_xpoints);
+    P_cX = nan(n_classes,n_classes,opt.test.n_trials);
     
     %% estimate feature spans
 
@@ -54,89 +54,89 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(tensor,opt)
         x_kernel = x_kernel / nansum(x_kernel);
         
         % preallocation
-        p_Xt = nan(n_timepoints,opt.train.n_trials,opt.n_xpoints);
+        p_Xc = nan(n_classes,opt.train.n_trials,opt.n_xpoints);
 
         % iterate through training trials
         for kk = 1 : opt.train.n_trials
             train_idx = opt.train.trial_idcs(kk);
             
             % compute likelihood
-            x_counts = histcounts2(1:n_timepoints,X(:,train_idx)',...
-                'xbinedges',1:n_timepoints+1,...
+            x_counts = histcounts2(1:n_classes,X(:,train_idx)',...
+                'xbinedges',1:n_classes+1,...
                 'ybinedges',x_edges);
-            p_Xt(:,kk,:) = conv2(1,x_kernel,x_counts,'same');
+            p_Xc(:,kk,:) = conv2(1,x_kernel,x_counts,'same');
         end
         
         % store average joint distribution
-        P_Xt(:,ff,:) = nanmean(p_Xt,2);
+        P_Xc(:,ff,:) = nanmean(p_Xc,2);
     end
 
     % normalization
-    P_Xt = P_Xt ./ nansum(P_Xt,3);
+    P_Xc = P_Xc ./ nansum(P_Xc,3);
 
     %% construct posteriors
 
     % prior definition
-    p_t = ones(n_timepoints,1) / n_timepoints;
+    p_c = ones(n_classes,1) / n_classes;
     
     % iterate through test trials
     for kk = 1 : opt.test.n_trials
         progressreport(kk,opt.test.n_trials,'constructing posteriors');
         test_idx = opt.test.trial_idcs(kk);
 
-        % iterate through true time for the current test trial
-        for tt = 1 : n_timepoints
+        % iterate through classes for the current test trial
+        for cc = 1 : n_classes
             
             % fetch current observations
-            x = tensor(tt,:,test_idx)';
+            x = tensor(cc,:,test_idx)';
 
             % index current observation
             x_edges = vertcat(features.x_edges);
             [~,x_idcs] = min(abs(x_edges(:,1:end-1) - x),[],2);
             
             % preallocation
-            p_tx = nan(n_features,n_timepoints);
+            p_cx = nan(n_features,n_classes);
             
             % iterate through features
             for ff = 1 : n_features
                 
                 % assume empirical encoding model
-                p_tx(ff,:) = P_Xt(:,ff,x_idcs(ff));
+                p_cx(ff,:) = P_Xc(:,ff,x_idcs(ff));
             end
             
             % normalization
-            p_tx = p_tx ./ nansum(p_tx,2);
-            nan_flags = all(isnan(p_tx),2) | isnan(x);
+            p_cx = p_cx ./ nansum(p_cx,2);
+            nan_flags = all(isnan(p_cx),2) | isnan(x);
             if all(nan_flags)
                 continue;
             end
             
             % compute posterior (with numerical precision issues in mind)
             fudge = 1 + 1 / n_features;
-            p_tX = p_t .* prod(p_tx(~nan_flags,:) * n_timepoints + fudge,1)';
-            p_X = nansum(p_tX);
-            P_tX(tt,:,kk) = p_tX / p_X;
+            p_cX = p_c .* prod(p_cx(~nan_flags,:) * n_classes + fudge,1)';
+            p_X = nansum(p_cX);
+            P_cX(cc,:,kk) = p_cX / p_X;
         end
         
         % flag valid time for the current trial
-        test_time_flags = ~all(isnan(P_tX(:,:,kk)),2);
+        test_time_flags = ~all(isnan(P_cX(:,:,kk)),2);
         
         % fetch single trial posteriors to compute point estimates
-        P_tX_kk = P_tX(test_time_flags,:,kk);
+        P_cX_kk = P_cX(test_time_flags,:,kk);
         
         % posterior mode (aka MAP)
-        [~,mode_idcs] = max(P_tX_kk,[],2);
+        [~,mode_idcs] = max(P_cX_kk,[],2);
         pthat.mode(test_time_flags,kk) = opt.time(mode_idcs);
         
         % posterior median
         median_flags = [false(sum(test_time_flags),1),...
-            diff(cumsum(P_tX_kk,2) > .5,1,2) == 1];
+            diff(cumsum(P_cX_kk,2) > .5,1,2) == 1];
         [~,median_idcs] = max(median_flags,[],2);
         pthat.median(test_time_flags,kk) = opt.time(median_idcs);
         
         % posterior mean (aka COM)
-        P_tX_kk(isnan(P_tX_kk)) = 0;
-        pthat.mean(test_time_flags,kk) = opt.time * P_tX_kk';
+        P_cX_kk(isnan(P_cX_kk)) = 0;
+        pthat.mean(test_time_flags,kk) = opt.time * P_cX_kk';
     end
 end
 
