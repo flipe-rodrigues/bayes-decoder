@@ -89,7 +89,10 @@ function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
             
             % fetch current observations
             x = tensor(cc,:,test_idx)';
-
+            if all(isnan(x))
+                continue;
+            end
+            
             % index current observation
             x_edges = vertcat(features.x_edges);
             [~,x_idcs] = min(abs(x_edges(:,1:end-1) - x),[],2);
@@ -111,7 +114,7 @@ function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
                 continue;
             end
             
-            % compute posterior (with numerical precision issues in mind)
+            % compute posterior (accounting for numerical precision issues)
             fudge = 1 + 1 / n_features;
             p_cX = p_c .* prod(p_cx(~nan_flags,:) * n_classes + fudge,1)';
             p_X = nansum(p_cX);
