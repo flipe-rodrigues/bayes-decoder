@@ -17,7 +17,11 @@ function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
     pthat.mode = nan(n_classes,opt.test.n_trials);
     pthat.median = nan(n_classes,opt.test.n_trials);
     pthat.mean = nan(n_classes,opt.test.n_trials);
-    
+
+    %% overwrite MATLAB's builtin definition for the poisson PDF
+    poisspdf = @(lambda,k) ...
+        exp(k .* log(lambda + 1e-100) - lambda - gammaln(k + 1));
+
     %% estimate feature spans
 
     % iterate through features
@@ -28,7 +32,7 @@ function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
         X = squeeze(tensor(:,ff,:));
         
         % estimate feature span
-        x_bounds = quantile(X(:),[0,1]+[1,-1]*.01).*(1+[-1,1]*.025);
+        x_bounds = quantile(X(:),[0,1]+[1,-1]*.001).*(1+[-1,1]*.025);
         [~,x_edges] = histcounts(X(X>=x_bounds(1)&X<=x_bounds(2)),opt.n_xpoints);
         
         % update feature
@@ -57,32 +61,40 @@ function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
         x_kernel = normpdf(x_edges,mean(x_bounds),x_bw);
         x_kernel = x_kernel / nansum(x_kernel);
         
-        % preallocation
-        p_Xc = nan(n_classes,opt.train.n_trials,opt.n_xpoints);
+        % compute joint distribution
+        if opt.assumepoissonmdl
 
-        % iterate through training trials
-        for kk = 1 : opt.train.n_trials
-            train_idx = opt.train.trial_idcs(kk);
+            % store theoretical joint distribution
+            P_Xc(:,ff,:) = poisspdf(X_mus(:,ff),x_edges(1:end-1));
+        else
             
-            % compute likelihood
-            x_counts = histcounts2(1:n_classes,X(:,train_idx)',...
-                'xbinedges',1:n_classes+1,...
-                'ybinedges',x_edges);
-            p_Xc(:,kk,:) = conv2(1,x_kernel,x_counts,'same');
+            % preallocation
+            p_Xc = nan(n_classes,opt.train.n_trials,opt.n_xpoints);
+            
+            % iterate through training trials
+            for kk = 1 : opt.train.n_trials
+                train_idx = opt.train.trial_idcs(kk);
+                
+                % compute likelihood
+                x_counts = histcounts2(1:n_classes,X(:,train_idx)',...
+                    'xbinedges',1:n_classes+1,...
+                    'ybinedges',x_edges);
+                p_Xc(:,kk,:) = conv2(x_kernel,x_kernel,x_counts,'same');
+            end
+            
+            % store average empirical joint distribution
+            P_Xc(:,ff,:) = nanmean(p_Xc,2);
         end
-        
-        % store average joint distribution
-        P_Xc(:,ff,:) = nanmean(p_Xc,2);
+    
+        % update feature
+        features(ff).x_mu = X_mus(:,ff);
     end
 
     % normalization
     P_Xc = P_Xc ./ nansum(P_Xc,3);
 
     %% construct posteriors
-
-    % overwrite poisson PDF definition
-    poisspdf = @(lambda,k) exp(k .* log(lambda) - lambda - gammaln(k + 1));
-    
+  
     % prior definition
     p_c = ones(n_classes,1) / n_classes;
     
@@ -144,17 +156,17 @@ function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
         
         % posterior mode (aka MAP)
         [~,mode_idcs] = max(P_cX_kk,[],2);
-        pthat.mode(test_time_flags,kk) = opt.time(mode_idcs);
+        pthat.mode(test_time_flags,kk) = opt.classes(mode_idcs);
         
         % posterior median
         median_flags = [false(sum(test_time_flags),1),...
             diff(cumsum(P_cX_kk,2) > .5,1,2) == 1];
         [~,median_idcs] = max(median_flags,[],2);
-        pthat.median(test_time_flags,kk) = opt.time(median_idcs);
+        pthat.median(test_time_flags,kk) = opt.classes(median_idcs);
         
         % posterior mean (aka COM)
         P_cX_kk(isnan(P_cX_kk)) = 0;
-        pthat.mean(test_time_flags,kk) = opt.time * P_cX_kk';
+        pthat.mean(test_time_flags,kk) = opt.classes * P_cX_kk';
     end
 end
 
