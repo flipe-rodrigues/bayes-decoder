@@ -14,7 +14,7 @@ function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
     X_mus = nan(n_classes,n_features);
     P_Xc = nan(n_classes,n_features,opt.n_xpoints);
     P_cX = nan(n_classes,n_classes,opt.test.n_trials);
-    P_X = nan(n_classes,n_features,opt.n_xpoints);
+    P_X = nan(n_features,opt.n_xpoints);
     pthat.mode = nan(n_classes,opt.test.n_trials);
     pthat.median = nan(n_classes,opt.test.n_trials);
     pthat.mean = nan(n_classes,opt.test.n_trials);
@@ -75,7 +75,7 @@ function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
 
             % preallocation
             p_Xc = nan(n_classes,opt.train.n_trials,opt.n_xpoints);
-            p_X = nan(n_classes,opt.train.n_trials,opt.n_xpoints);
+            p_X = nan(opt.train.n_trials,opt.n_xpoints);
 
             % iterate through training trials
             for kk = 1 : opt.train.n_trials
@@ -90,25 +90,24 @@ function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
                 % 
                 x_counts = histcounts(X(:,train_idx),...
                     'binedges',x_edges);
-                p_X(:,kk,:) = repmat(...
-                    conv2(1,x_kernel,x_counts,'same'),n_classes,1);
+                p_X(kk,:) = conv2(1,x_kernel,x_counts,'same');
             end
             
             % store average empirical joint distribution
             P_Xc(:,ff,:) = nanmean(p_Xc,2);
             
             %
-            P_X(:,ff,:) = nanmean(p_X,2);
+            P_X(ff,:) = nanmean(p_X,1);
         end
         
         % normalization
         P_Xc(:,ff,:) = P_Xc(:,ff,:) ./ nansum(P_Xc(:,ff,:),3);
-        P_X(:,ff,:) = P_X(:,ff,:) ./ nansum(P_X(:,ff,:),3);
+        P_X(ff,:) = P_X(ff,:) ./ nansum(P_X(ff,:));
 
         % update feature
         features(ff).x_mu = X_mus(:,ff);
         features(ff).p_Xc = squeeze(P_Xc(:,ff,:));
-        features(ff).p_X = squeeze(P_Xc(1,ff,:));
+        features(ff).p_X = P_X(ff,:);
     end
 
     %% construct posteriors
@@ -147,7 +146,7 @@ function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
 
                 % preallocation
                 p_cx = nan(n_features,n_classes);
-                p_x = nan(n_features,n_classes);
+                p_x = nan(n_features,1);
 
                 % iterate through features
                 for ff = 1 : n_features
@@ -155,17 +154,12 @@ function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
                     % assume empirical encoding model
                     p_cx(ff,:) = P_Xc(:,ff,x_idcs(ff));
                     
-                    p_x(ff,:) = P_X(:,ff,x_idcs(ff));
+                    p_x(ff) = P_X(ff,x_idcs(ff));
                 end
             end
-            
-            if opt.subtractchance
-                p_cx = p_cx - p_x;
-            end
-            
+
             % normalization
             p_cx = p_cx ./ nansum(p_cx,2);
-            p_x = p_x ./ nansum(p_x,2);
             nan_flags = all(isnan(p_cx),2) | isnan(x);
             if all(nan_flags)
                 continue;
@@ -174,8 +168,14 @@ function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
             % compute posterior (accounting for numerical precision issues)
             fudge = 1 + 1 / n_features;
             p_cX = p_c .* prod(p_cx(~nan_flags,:) * n_classes + fudge,1)';
-
-            % normalization
+            
+            %
+            if opt.subtractchance
+                p_X = prod(p_x(~nan_flags) + fudge);
+                p_cX = p_cX - prod(p_x(~nan_flags));
+            end
+            
+            %
             p_X = nansum(p_cX);
             P_cX(cc,:,kk) = p_cX / p_X;
         end
