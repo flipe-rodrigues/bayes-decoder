@@ -1,4 +1,4 @@
-function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
+function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
     %UNTITLED Summary of this function goes here
     %   Detailed explanation goes here
 
@@ -85,21 +85,21 @@ function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
                 Xc_counts = histcounts2(1:n_classes,X(:,train_idx)',...
                     'xbinedges',1:n_classes+1,...
                     'ybinedges',x_edges);
-                p_Xc(:,kk,:) = conv2(x_kernel,x_kernel,Xc_counts,'same');    
-                
-                % 
+                p_Xc(:,kk,:) = conv2(x_kernel,x_kernel,Xc_counts,'same');
+
+                %
                 x_counts = histcounts(X(:,train_idx),...
                     'binedges',x_edges);
                 p_X(kk,:) = conv2(1,x_kernel,x_counts,'same');
             end
-            
+
             % store average empirical joint distribution
             P_Xc(:,ff,:) = nanmean(p_Xc,2);
-            
+
             %
             P_X(ff,:) = nanmean(p_X,1);
         end
-        
+
         % normalization
         P_Xc(:,ff,:) = P_Xc(:,ff,:) ./ nansum(P_Xc(:,ff,:),3);
         P_X(ff,:) = P_X(ff,:) ./ nansum(P_X(ff,:));
@@ -153,7 +153,7 @@ function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
 
                     % assume empirical encoding model
                     p_cx(ff,:) = P_Xc(:,ff,x_idcs(ff));
-                    
+
                     p_x(ff) = P_X(ff,x_idcs(ff));
                 end
             end
@@ -164,17 +164,17 @@ function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
             if all(nan_flags)
                 continue;
             end
-            
+
             % compute posterior (accounting for numerical precision issues)
             fudge = 1 + 1 / n_features;
             p_cX = p_c .* prod(p_cx(~nan_flags,:) * n_classes + fudge,1)';
-            
+
             %
             if opt.subtractchance
                 p_X = prod(p_x(~nan_flags) + fudge);
                 p_cX = p_cX - prod(p_x(~nan_flags));
             end
-            
+
             %
             p_X = nansum(p_cX);
             P_cX(cc,:,kk) = p_cX / p_X;

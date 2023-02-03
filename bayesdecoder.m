@@ -85,22 +85,22 @@ function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
                 Xc_counts = histcounts2(1:n_classes,X(:,train_idx)',...
                     'xbinedges',1:n_classes+1,...
                     'ybinedges',x_edges);
-                p_Xc(:,kk,:) = conv2(x_kernel,x_kernel,Xc_counts,'same');    
-                
-                % 
+                p_Xc(:,kk,:) = conv2(x_kernel,x_kernel,Xc_counts,'same');
+
+                %
                 x_counts = histcounts(X(:,train_idx),...
                     'binedges',x_edges);
                 p_X(:,kk,:) = repmat(...
                     conv2(1,x_kernel,x_counts,'same'),n_classes,1);
             end
-            
+
             % store average empirical joint distribution
             P_Xc(:,ff,:) = nanmean(p_Xc,2);
-            
+
             %
             P_X(:,ff,:) = nanmean(p_X,2);
         end
-        
+
         % normalization
         P_Xc(:,ff,:) = P_Xc(:,ff,:) ./ nansum(P_Xc(:,ff,:),3);
         P_X(:,ff,:) = P_X(:,ff,:) ./ nansum(P_X(:,ff,:),3);
@@ -150,19 +150,20 @@ function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
                 p_x = nan(n_features,n_classes);
 
                 % iterate through features
+                rand_idcs = randperm(n_classes);
                 for ff = 1 : n_features
 
                     % assume empirical encoding model
                     p_cx(ff,:) = P_Xc(:,ff,x_idcs(ff));
-                    
+
                     p_x(ff,:) = P_X(:,ff,x_idcs(ff));
                 end
             end
-            
+
             if opt.subtractchance
                 p_cx = p_cx - p_x;
             end
-            
+
             % normalization
             p_cx = p_cx ./ nansum(p_cx,2);
             p_x = p_x ./ nansum(p_x,2);
@@ -170,7 +171,7 @@ function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
             if all(nan_flags)
                 continue;
             end
-            
+
             % compute posterior (accounting for numerical precision issues)
             fudge = 1 + 1 / n_features;
             p_cX = p_c .* prod(p_cx(~nan_flags,:) * n_classes + fudge,1)';
@@ -204,27 +205,34 @@ end
 
 %% utility functions
 function progressreport(iter,n_iter,message,bar_len)
-if nargin < 4
-    bar_len = 30;
-end
-progress = floor(iter / n_iter * 100);
-if iter > 1
-    for jj = 1 : (length(message) + bar_len + 8)
-        fprintf('\b');
+    if nargin < 4
+        bar_len = 30;
     end
-end
-fprintf('|');
-for jj = 1 : bar_len
-    if progress/(100/bar_len) >= jj
-        fprintf('#');
+    persistent progress;
+    if isempty(progress)
+        progress = -1;
+    elseif progress ~= floor(iter / n_iter * 100)
+        progress = floor(iter / n_iter * 100);
     else
-        fprintf('-');
+        return;
     end
-end
-fprintf('| ');
-if progress == 100
-    fprintf([message, ' ... done.\n']);
-else
-    fprintf([message, ' ... ']);
-end
+    if iter > 1
+        for jj = 1 : (length(message) + bar_len + 8)
+            fprintf('\b');
+        end
+    end
+    fprintf('|');
+    for jj = 1 : bar_len
+        if progress/(100/bar_len) >= jj
+            fprintf('#');
+        else
+            fprintf('-');
+        end
+    end
+    fprintf('| ');
+    if progress == 100
+        fprintf([message, ' ... done.\n']);
+    else
+        fprintf([message, ' ... ']);
+    end
 end
