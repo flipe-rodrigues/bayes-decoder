@@ -1,9 +1,9 @@
-function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
+function [P_cX,P_Xc,pthat,features] = naivebayesdecoder(X_tensor,opt)
     %UNTITLED Summary of this function goes here
     %   Detailed explanation goes here
 
     %% input parsing
-    [n_classes,n_features,~] = size(tensor);
+    [n_classes,n_features,~] = size(X_tensor);
 
     %% output preallocation
     features = cell(n_features,1);
@@ -14,7 +14,6 @@ function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
     X_mus = nan(n_classes,n_features);
     P_Xc = nan(n_classes,n_features,opt.n_xpoints);
     P_cX = nan(n_classes,n_classes,opt.test.n_trials);
-    P_X = nan(n_features,opt.n_xpoints);
     pthat.mode = nan(n_classes,opt.test.n_trials);
     pthat.median = nan(n_classes,opt.test.n_trials);
     pthat.mean = nan(n_classes,opt.test.n_trials);
@@ -32,7 +31,7 @@ function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
         end
 
         % parse feature
-        X = squeeze(tensor(:,ff,:));
+        X = squeeze(X_tensor(:,ff,:));
 
         % estimate feature span
         x_bounds = quantile(X(:),[0,1]+[1,-1]*.001).*(1+[-1,1]*.025);
@@ -54,7 +53,7 @@ function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
         end
 
         % parse feature
-        X = squeeze(tensor(:,ff,:));
+        X = squeeze(X_tensor(:,ff,:));
         x_bounds = features(ff).x_bounds;
         x_edges = features(ff).x_edges;
         x_bw = features(ff).x_bw;
@@ -75,39 +74,28 @@ function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
 
             % preallocation
             p_Xc = nan(n_classes,opt.train.n_trials,opt.n_xpoints);
-            p_X = nan(opt.train.n_trials,opt.n_xpoints);
 
             % iterate through training trials
             for kk = 1 : opt.train.n_trials
                 train_idx = opt.train.trial_idcs(kk);
 
                 % compute likelihood
-                Xc_counts = histcounts2(1:n_classes,X(:,train_idx)',...
+                x_counts = histcounts2(1:n_classes,X(:,train_idx)',...
                     'xbinedges',1:n_classes+1,...
                     'ybinedges',x_edges);
-                p_Xc(:,kk,:) = conv2(x_kernel,x_kernel,Xc_counts,'same');
-
-                %
-                x_counts = histcounts(X(:,train_idx),...
-                    'binedges',x_edges);
-                p_X(kk,:) = conv2(1,x_kernel,x_counts,'same');
+                p_Xc(:,kk,:) = conv2(1,x_kernel,x_counts,'same');
             end
 
             % store average empirical joint distribution
             P_Xc(:,ff,:) = nanmean(p_Xc,2);
-
-            %
-            P_X(ff,:) = nanmean(p_X,1);
         end
 
         % normalization
         P_Xc(:,ff,:) = P_Xc(:,ff,:) ./ nansum(P_Xc(:,ff,:),3);
-        P_X(ff,:) = P_X(ff,:) ./ nansum(P_X(ff,:));
 
         % update feature
         features(ff).x_mu = X_mus(:,ff);
         features(ff).p_Xc = squeeze(P_Xc(:,ff,:));
-        features(ff).p_X = P_X(ff,:);
     end
 
     %% construct posteriors
@@ -120,15 +108,13 @@ function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
         if opt.verbose
             progressreport(kk,opt.test.n_trials,'constructing posteriors');
         end
-
-        %
         test_idx = opt.test.trial_idcs(kk);
 
         % iterate through classes for the current test trial
         for cc = 1 : n_classes
 
             % fetch current observations
-            x = tensor(cc,:,test_idx)';
+            x = X_tensor(cc,:,test_idx)';
             if all(isnan(x))
                 continue;
             end
@@ -146,15 +132,12 @@ function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
 
                 % preallocation
                 p_cx = nan(n_features,n_classes);
-                p_x = nan(n_features,1);
 
                 % iterate through features
                 for ff = 1 : n_features
 
                     % assume empirical encoding model
                     p_cx(ff,:) = P_Xc(:,ff,x_idcs(ff));
-
-                    p_x(ff) = P_X(ff,x_idcs(ff));
                 end
             end
 
@@ -169,13 +152,7 @@ function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
             fudge = 1 + 1 / n_features;
             p_cX = p_c .* prod(p_cx(~nan_flags,:) * n_classes + fudge,1)';
 
-            %
-            if opt.subtractchance
-                p_X = prod(p_x(~nan_flags) + fudge);
-                p_cX = p_cX - prod(p_x(~nan_flags));
-            end
-
-            %
+            % normalization
             p_X = nansum(p_cX);
             P_cX(cc,:,kk) = p_cX / p_X;
         end
@@ -200,31 +177,4 @@ function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
         P_cX_kk(isnan(P_cX_kk)) = 0;
         pthat.mean(test_time_flags,kk) = opt.classes * P_cX_kk';
     end
-end
-
-%% utility functions
-function progressreport(iter,n_iter,message,bar_len)
-if nargin < 4
-    bar_len = 30;
-end
-progress = floor(iter / n_iter * 100);
-if iter > 1
-    for jj = 1 : (length(message) + bar_len + 8)
-        fprintf('\b');
-    end
-end
-fprintf('|');
-for jj = 1 : bar_len
-    if progress/(100/bar_len) >= jj
-        fprintf('#');
-    else
-        fprintf('-');
-    end
-end
-fprintf('| ');
-if progress == 100
-    fprintf([message, ' ... done.\n']);
-else
-    fprintf([message, ' ... ']);
-end
 end
