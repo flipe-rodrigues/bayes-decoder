@@ -1,4 +1,4 @@
-function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
+function [P_cX,P_Xc,pthat,features] = bayesdecoder(tensor,opt)
     %UNTITLED Summary of this function goes here
     %   Detailed explanation goes here
 
@@ -121,8 +121,6 @@ function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
         if opt.verbose
             progressreport(kk,opt.test.n_trials,'constructing posteriors');
         end
-
-        %
         test_idx = opt.test.trial_idcs(kk);
 
         % iterate through classes for the current test trial
@@ -147,26 +145,17 @@ function [P_cX,P_Xc,pthat,features,P_X] = bayesdecoder(tensor,opt)
 
                 % preallocation
                 p_cx = nan(n_features,n_classes);
-                p_x = nan(n_features,n_classes);
 
                 % iterate through features
-                rand_idcs = randperm(n_classes);
                 for ff = 1 : n_features
 
                     % assume empirical encoding model
                     p_cx(ff,:) = P_Xc(:,ff,x_idcs(ff));
-
-                    p_x(ff,:) = P_X(:,ff,x_idcs(ff));
                 end
-            end
-
-            if opt.subtractchance
-                p_cx = p_cx - p_x;
             end
 
             % normalization
             p_cx = p_cx ./ nansum(p_cx,2);
-            p_x = p_x ./ nansum(p_x,2);
             nan_flags = all(isnan(p_cx),2) | isnan(x);
             if all(nan_flags)
                 continue;
