@@ -1,4 +1,4 @@
-# naive-bayes-time-decoder
+# bayes-decoder
  
 Matlab code for running a Naive Bayes Time Decoder (used in ____).
 
