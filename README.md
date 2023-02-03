@@ -2,6 +2,6 @@
  
 Matlab code for running a Naive Bayes Time Decoder (used in ____).
 
-### naivebayestimedecoder.m
+### bayesdecoder.m
 
-### naivebayestimedecoder_demo.m
+### bayesdecoder_demo.m
