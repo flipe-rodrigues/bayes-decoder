@@ -195,7 +195,8 @@ opt.assumepoissonmdl = false;
 opt.verbose = true;
 
 tic
-[P_tR,P_Rt,pthat,neurons] = naivebayestimedecoder(R,opt);
+[P_tR,P_Rt,pthat,neurons,P_Rt_shuffled,P_tR_chance] = ...
+    naivebayestimedecoder(R,opt);
 toc
 
 %% chance-level decoding

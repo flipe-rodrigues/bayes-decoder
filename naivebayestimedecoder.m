@@ -1,4 +1,5 @@
-function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
+function [P_tX,P_Xt,pthat,features,...
+    P_Xt_shuffled,P_tX_chance] = naivebayestimedecoder(X,opt)
     %UNTITLED Summary of this function goes here
     %   Detailed explanation goes here
 
@@ -13,7 +14,9 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
     features = cell2mat(features);
     X_mus = nan(n_timepoints,n_features);
     P_Xt = nan(n_timepoints,n_features,opt.n_xpoints);
+    P_Xt_shuffled = nan(n_timepoints,n_features,opt.n_xpoints);
     P_tX = nan(n_timepoints,n_timepoints,opt.test.n_trials);
+    P_tX_chance = nan(n_timepoints,n_timepoints,opt.test.n_trials);
     pthat.mode = nan(n_timepoints,opt.test.n_trials);
     pthat.median = nan(n_timepoints,opt.test.n_trials);
     pthat.mean = nan(n_timepoints,opt.test.n_trials);
@@ -101,8 +104,8 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
         features(ff).p_Xc = squeeze(P_Xt(:,ff,:));
     end
 
-    %% 
-    
+    %% shuffling
+    P_Xt_shuffled = P_Xt(randperm(n_timepoints),:,:);
 %     % preallocation
 %     shuffle_idcs = nan(n_timepoints,opt.test.n_trials,opt.shuffle.n);
 %     
@@ -138,11 +141,12 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
             end
             
             %
-            p_tX = decode(...
-                x,X_edges,P_Xt,p_t,n_features,n_timepoints);
+            p_tX = decode(x,X_edges,P_Xt,p_t,n_features,n_timepoints);
+            p_tX_chance = decode(x,X_edges,P_Xt_shuffled,p_t,n_features,n_timepoints);
             
             %
             P_tX(tt,:,kk) = p_tX;
+            P_tX_chance(tt,:,kk) = p_tX_chance;
         end
         
 %         figure; hold on;
