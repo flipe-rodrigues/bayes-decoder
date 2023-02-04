@@ -1,5 +1,5 @@
-function [P_tX,P_Xt,pthat,features,...
-    P_Xt_shuffled,P_tX_chance] = naivebayestimedecoder(X,opt)
+function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
+    naivebayestimedecoder(X,opt)
     %UNTITLED Summary of this function goes here
     %   Detailed explanation goes here
 
@@ -15,16 +15,10 @@ function [P_tX,P_Xt,pthat,features,...
     X_mus = nan(n_timepoints,n_features);
     P_Xt = nan(n_timepoints,n_features,opt.n_xpoints);
     P_tX = nan(n_timepoints,n_timepoints,opt.test.n_trials);
-    P_tX_chance = nan(n_timepoints,n_timepoints,opt.test.n_trials);
+    P_tX_chance = nan(n_timepoints,n_timepoints,opt.test.n_trials,opt.n_shuffles);
     pthat.mode = nan(n_timepoints,opt.test.n_trials);
     pthat.median = nan(n_timepoints,opt.test.n_trials);
     pthat.mean = nan(n_timepoints,opt.test.n_trials);
-    
-    % !!!!!!!!!!!!!!!!!!!
-%     X = gpuArray(X);
-%     P_Xt = gpuArray(P_Xt);
-%     P_tX = gpuArray(P_tX);
-%     P_tX_chance = gpuArray(P_tX_chance);
 
     %% overwrite MATLAB's builtin definition for the poisson PDF
     poisspdf = @(lambda,k) ...
@@ -109,8 +103,11 @@ function [P_tX,P_Xt,pthat,features,...
         features(ff).p_Xc = squeeze(P_Xt(:,ff,:));
     end
 
+    %%
+    log_P_Xt = log(P_Xt);
+    
     %% shuffling
-    P_Xt_shuffled = P_Xt(randperm(n_timepoints),:,:);
+    log_P_Xt_shuffled = log_P_Xt(randperm(n_timepoints),:,:);
 %     % preallocation
 %     shuffle_idcs = nan(n_timepoints,opt.test.n_trials,opt.shuffle.n);
 %     
@@ -124,10 +121,11 @@ function [P_tX,P_Xt,pthat,features,...
 %             'uniformoutput',false))';
 %     end
     
-    %% construct posteriors
-
-    % prior definition
+    %% prior definition
     p_t = ones(n_timepoints,1) / n_timepoints;
+    log_p_t = log(p_t);
+    
+    %% construct posteriors
 
     % iterate through test trials
     for kk = 1 : opt.test.n_trials
@@ -137,7 +135,7 @@ function [P_tX,P_Xt,pthat,features,...
         test_idx = opt.test.trial_idcs(kk);
 
         % iterate through time for the current test trial
-        parfor tt = 1 : n_timepoints
+        for tt = 1 : n_timepoints
 
             % fetch current observations
             x = X(tt,:,test_idx)';
@@ -146,8 +144,8 @@ function [P_tX,P_Xt,pthat,features,...
             end
             
             %
-            p_tX = decode(x,X_edges,P_Xt,p_t,n_features,n_timepoints);
-            p_tX_chance = decode(x,X_edges,P_Xt_shuffled,p_t,n_features,n_timepoints);
+            p_tX = decode(x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints);
+            p_tX_chance = decode(x,X_edges,log_P_Xt_shuffled,log_p_t,n_features,n_timepoints);
             
             %
             P_tX(tt,:,kk) = p_tX;
@@ -282,34 +280,33 @@ function mdl = train(X,opt)
 
 end
 
-function p_tX = decode(x,X_edges,P_Xt,p_t,n_features,n_timepoints)
+function p_tX = decode(x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints)
 
     % index current observation
     [~,x_idcs] = min(abs(X_edges(:,1:end-1) - x),[],2);
 
     % preallocation
-    p_tx = nan(n_features,n_timepoints);
+    log_p_tx = nan(n_features,n_timepoints);
 
     % iterate through features
     for ff = 1 : n_features
 
         % assume empirical encoding model
-        p_tx(ff,:) = P_Xt(:,ff,x_idcs(ff));
+        log_p_tx(ff,:) = log_P_Xt(:,ff,x_idcs(ff));
     end
-
-    % normalization
-    p_tx = p_tx ./ nansum(p_tx,2);
-    nan_flags = all(isnan(p_tx),2) | isnan(x);
+    
+    % nan check
+    nan_flags = all(isnan(log_p_tx),2) | isnan(x);
     if all(nan_flags)
         return;
     end
 
-    % compute posterior (accounting for numerical precision issues)
-    p_tX = log(p_t) + nansum(log(p_tx(~nan_flags,:)))';
-    p_tX = p_tX - nanmax(p_tX);
-    p_tX = exp(p_tX);
+    % compute posterior by summing over log-likelihoods
+    log_p_tX = log_p_t + nansum(log_p_tx(~nan_flags,:))';
+    
+    % convert back to probability
+    p_tX = exp(log_p_tX - nanmax(log_p_tX));
 
     % normalization
-    p_X = nansum(p_tX);
-    p_tX = p_tX / p_X;
+    p_tX = p_tX / nansum(p_tX);
 end
