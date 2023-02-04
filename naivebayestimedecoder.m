@@ -1,4 +1,4 @@
-function [P_tX,P_Xt,pthat,features,mask] = naivebayestimedecoder(X,opt)
+function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
     %UNTITLED Summary of this function goes here
     %   Detailed explanation goes here
 
@@ -14,7 +14,6 @@ function [P_tX,P_Xt,pthat,features,mask] = naivebayestimedecoder(X,opt)
     X_mus = nan(n_timepoints,n_features);
     P_Xt = nan(n_timepoints,n_features,opt.n_xpoints);
     P_tX = nan(n_timepoints,n_timepoints,opt.test.n_trials);
-    mask = nan(n_timepoints,n_timepoints,opt.test.n_trials);
     pthat.mode = nan(n_timepoints,opt.test.n_trials);
     pthat.median = nan(n_timepoints,opt.test.n_trials);
     pthat.mean = nan(n_timepoints,opt.test.n_trials);
@@ -139,13 +138,13 @@ function [P_tX,P_Xt,pthat,features,mask] = naivebayestimedecoder(X,opt)
             end
             
             %
-            p_tX = predictnaivebayestimedecoder(...
+            p_tX = decode(...
                 x,X_edges,P_Xt,p_t,n_features,n_timepoints);
             
             %
             P_tX(tt,:,kk) = p_tX;
         end
-        continue;
+        
 %         figure; hold on;
 %         p_x = nan(n_timepoints,opt.shuffle.n);
 % 
@@ -270,12 +269,11 @@ function [P_tX,P_Xt,pthat,features,mask] = naivebayestimedecoder(X,opt)
     end
 end
 
-function mdl = fitnaivebayestimedecoder(X,opt)
+function mdl = train(X,opt)
 
 end
 
-function p_tX = predictnaivebayestimedecoder(...
-    x,X_edges,P_Xt,p_t,n_features,n_timepoints)
+function p_tX = decode(x,X_edges,P_Xt,p_t,n_features,n_timepoints)
 
     % index current observation
     [~,x_idcs] = min(abs(X_edges(:,1:end-1) - x),[],2);
@@ -298,7 +296,9 @@ function p_tX = predictnaivebayestimedecoder(...
     end
 
     % compute posterior (accounting for numerical precision issues)
-    p_tX = p_t .* prod(p_tx(~nan_flags,:) * n_timepoints)';
+    p_tX = log(p_t) + sum(log(p_tx(~nan_flags,:)))';
+    p_tX = p_tX - max(p_tX);
+    p_tX = exp(p_tX);
 
     % normalization
     p_X = nansum(p_tX);
