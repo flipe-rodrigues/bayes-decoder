@@ -28,6 +28,7 @@ function progressreport( iter, n_iter, message, bar_len )
     fprintf('| ');
     if progress == 100
         fprintf([message, ' ... done.\n']);
+        progress = [];
     else
         fprintf([message, ' ... ']);
     end

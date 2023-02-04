@@ -108,7 +108,7 @@ for nn = 1 : N
     end
 end
 
-%% plot example trials
+%% plot example single-trials
 figure;
 set(gca,...
     'xlim',[ti,tf],...
@@ -126,7 +126,7 @@ for kk = ctrl_idcs(randperm(sum(ctrl_flags),10))
     drawnow;
 end
 
-%% condition-split means
+%% plot condition-split averages
 figure;
 set(gca,...
     'xlim',[ti,tf],...
@@ -185,7 +185,7 @@ errfun = @(x,d) quantile(x,[.25,.75],d) - nanmedian(x,d);
 %% naive bayes decoder
 opt = struct();
 opt.n_xpoints = 100;
-opt.classes = t;
+opt.time = t;
 opt.train.trial_idcs = randsample(ctrl_idcs,n_ctrl_trials/2);
 opt.train.n_trials = numel(opt.train.trial_idcs);
 opt.test.trial_idcs = trial_idcs(...
@@ -195,7 +195,7 @@ opt.assumepoissonmdl = false;
 opt.verbose = true;
 
 tic
-[P_tR,P_Rt,pthat,neurons] = naivebayesdecoder(R,opt);
+[P_tR,P_Rt,pthat,neurons,mask] = naivebayestimedecoder(R,opt);
 toc
 
 %% chance-level decoding
@@ -207,7 +207,7 @@ toc
 % end
 % 
 % tic
-% P_tR_shuffled = naivebayesdecoder(R_shuffled,opt);
+% P_tR_shuffled = naivebayestimedecoder(R_shuffled,opt);
 % toc
 % 
 % % subtract chance-level decoding
@@ -337,6 +337,9 @@ set(sps,...
     'plotboxaspectratio',[1,1,1]);
 linkaxes(sps);
 
+p_ctrl = avgfun(P_tR(:,:,ctrl_flags(opt.test.trial_idcs)),[1,3]);
+p_ctrl = p_ctrl ./ nansum(p_ctrl);
+
 % iterate through stimuli
 clims = quantile(P_tR(:),[0,.99]);
 for ii = 1 : stimulus.n
@@ -349,6 +352,7 @@ for ii = 1 : stimulus.n
     nan_flags = isnan(p_stim);
     p_stim = p_stim ./ nansum(p_stim,2);
     p_stim(nan_flags) = max([clims,max(p_stim,[],[1,2])]);
+    p_stim = p_stim - p_ctrl;
     imagesc(sps(ii),[t(1),t(end)],[t(1),t(end)],p_stim',clims);
     plot(sps(ii),xlim(sps(ii)),ylim(sps(ii)),'-k');
     plot(sps(ii),xlim(sps(ii)),ylim(sps(ii)),'--w');
