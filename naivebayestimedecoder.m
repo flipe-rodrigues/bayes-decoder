@@ -14,12 +14,17 @@ function [P_tX,P_Xt,pthat,features,...
     features = cell2mat(features);
     X_mus = nan(n_timepoints,n_features);
     P_Xt = nan(n_timepoints,n_features,opt.n_xpoints);
-    P_Xt_shuffled = nan(n_timepoints,n_features,opt.n_xpoints);
     P_tX = nan(n_timepoints,n_timepoints,opt.test.n_trials);
     P_tX_chance = nan(n_timepoints,n_timepoints,opt.test.n_trials);
     pthat.mode = nan(n_timepoints,opt.test.n_trials);
     pthat.median = nan(n_timepoints,opt.test.n_trials);
     pthat.mean = nan(n_timepoints,opt.test.n_trials);
+    
+    % !!!!!!!!!!!!!!!!!!!
+%     X = gpuArray(X);
+%     P_Xt = gpuArray(P_Xt);
+%     P_tX = gpuArray(P_tX);
+%     P_tX_chance = gpuArray(P_tX_chance);
 
     %% overwrite MATLAB's builtin definition for the poisson PDF
     poisspdf = @(lambda,k) ...
@@ -132,7 +137,7 @@ function [P_tX,P_Xt,pthat,features,...
         test_idx = opt.test.trial_idcs(kk);
 
         % iterate through time for the current test trial
-        for tt = 1 : n_timepoints
+        parfor tt = 1 : n_timepoints
 
             % fetch current observations
             x = X(tt,:,test_idx)';
@@ -300,8 +305,8 @@ function p_tX = decode(x,X_edges,P_Xt,p_t,n_features,n_timepoints)
     end
 
     % compute posterior (accounting for numerical precision issues)
-    p_tX = log(p_t) + sum(log(p_tx(~nan_flags,:)))';
-    p_tX = p_tX - max(p_tX);
+    p_tX = log(p_t) + nansum(log(p_tx(~nan_flags,:)))';
+    p_tX = p_tX - nanmax(p_tX);
     p_tX = exp(p_tX);
 
     % normalization

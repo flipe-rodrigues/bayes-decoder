@@ -272,7 +272,7 @@ for nn = 1 : N
     end
     ylim(r_bounds);
     title(sprintf('Neuron: %i, bw: %.2f',nn,r_bw));
-    p_Rt = neurons(nn).p_Xc;
+    p_Rt = squeeze(P_Rt_shuffled(:,nn,:)); % neurons(nn).p_Xc;
     p_Rt(isnan(p_Rt)) = max(p_Rt(:));
     imagesc([t(1),t(end)],r_bounds,p_Rt');
     plot(t,neurons(nn).x_mu,...
@@ -309,7 +309,7 @@ for kk = randperm(opt.test.n_trials,100)
         opt.test.trial_idcs(kk),...
         stimuli(opt.test.trial_idcs(kk)),...
         condition_set(y(opt.test.trial_idcs(kk)))));
-    p_tR = squeeze(P_tR(:,:,kk));
+    p_tR = squeeze(P_tR_chance(:,:,kk));
     p_tR(isnan(p_tR)) = max(p_tR(:));
     imagesc([t(1),t(end)],[t(1),t(end)],p_tR');
     plot([1,1]*stimuli(opt.test.trial_idcs(kk)),ylim,'--w');
