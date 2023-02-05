@@ -192,7 +192,7 @@ opt.test.trial_idcs = trial_idcs(...
     ~ismember(trial_idcs,opt.train.trial_idcs));
 opt.test.n_trials = numel(opt.test.trial_idcs);
 opt.prior = 1;
-opt.n_shuffles = 1;
+opt.n_shuffles = 100;
 opt.assumepoissonmdl = false;
 opt.verbose = true;
 
@@ -274,7 +274,7 @@ for nn = 1 : N
     end
     ylim(r_bounds);
     title(sprintf('Neuron: %i, bw: %.2f',nn,r_bw));
-    p_Rt = squeeze(P_Rt_shuffled(:,nn,:)); % neurons(nn).p_Xc;
+    p_Rt = squeeze(P_Rt(:,nn,:)); % neurons(nn).p_Xc;
     p_Rt(isnan(p_Rt)) = max(p_Rt(:));
     imagesc([t(1),t(end)],r_bounds,p_Rt');
     plot(t,neurons(nn).x_mu,...
@@ -366,11 +366,16 @@ figure(...
     'name','condition-split posterior averages',...
     'numbertitle','off',...
     'windowstyle','docked');
-sps = gobjects(C,1);
-for cc = 1 : C
-    sps(cc) = subplot(1,C,cc);
-    xlabel(sps(cc),'real time (a.u.)');
-    ylabel(sps(cc),'decoded time (a.u.)');
+n_rows = 2;
+n_cols = C;
+sps = gobjects(n_rows,n_cols);
+for rr = 1 : n_rows
+    for cc = 1 : n_cols
+        sp_idx = cc + (rr - 1) * n_cols;
+        sps(rr,cc) = subplot(n_rows,n_cols,sp_idx);
+        xlabel(sps(rr,cc),'real time (a.u.)');
+        ylabel(sps(rr,cc),'decoded time (a.u.)');
+    end
 end
 set(sps,...
     'xlim',[t(1),t(end)],...
@@ -384,12 +389,22 @@ linkaxes(sps);
 % iterate through conditions
 clims = quantile(P_tR(:),[0,.99]);
 for cc = 1 : C
-    title(sps(cc),sprintf('condition: %.2f',condition_set(cc)));
+    
+    %
+    title(sps(1,cc),sprintf('condition: %.2f',condition_set(cc)));
     p_cond = avgfun(P_tR(:,:,y(opt.test.trial_idcs)==cc),3);
     p_cond = p_cond ./ nansum(p_cond,2);
-    imagesc(sps(cc),[t(1),t(end)],[t(1),t(end)],p_cond',clims);
-    plot(sps(cc),xlim(sps(cc)),ylim(sps(cc)),'-k');
-    plot(sps(cc),xlim(sps(cc)),ylim(sps(cc)),'--w');
+    imagesc(sps(1,cc),[t(1),t(end)],[t(1),t(end)],p_cond',clims);
+    plot(sps(1,cc),xlim(sps(1,cc)),ylim(sps(1,cc)),'-k');
+    plot(sps(1,cc),xlim(sps(1,cc)),ylim(sps(1,cc)),'--w');
+    
+    %
+    title(sps(2,cc),sprintf('condition: %.2f',condition_set(cc)));
+    p_cond = avgfun(P_tR_chance(:,:,y(opt.test.trial_idcs)==cc),3);
+    p_cond = p_cond ./ nansum(p_cond,2);
+    imagesc(sps(2,cc),[t(1),t(end)],[t(1),t(end)],p_cond',clims);
+    plot(sps(2,cc),xlim(sps(2,cc)),ylim(sps(2,cc)),'-k');
+    plot(sps(2,cc),xlim(sps(2,cc)),ylim(sps(2,cc)),'--w');
 end
 
 %% plot control-subtracted posterior averages

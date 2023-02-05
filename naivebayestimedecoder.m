@@ -15,7 +15,7 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
     X_mus = nan(n_timepoints,n_features);
     P_Xt = nan(n_timepoints,n_features,opt.n_xpoints);
     P_tX = nan(n_timepoints,n_timepoints,opt.test.n_trials);
-    P_tX_chance = nan(n_timepoints,n_timepoints,opt.test.n_trials,opt.n_shuffles);
+    P_tX_chance = zeros(n_timepoints,n_timepoints,opt.test.n_trials);
     pthat.mode = nan(n_timepoints,opt.test.n_trials);
     pthat.median = nan(n_timepoints,opt.test.n_trials);
     pthat.mean = nan(n_timepoints,opt.test.n_trials);
@@ -107,7 +107,6 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
     log_P_Xt = log(P_Xt);
     
     %% shuffling
-    log_P_Xt_shuffled = log_P_Xt(randperm(n_timepoints),:,:);
 %     % preallocation
 %     shuffle_idcs = nan(n_timepoints,opt.test.n_trials,opt.shuffle.n);
 %     
@@ -122,7 +121,7 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
 %     end
     
     %% prior definition
-    p_t = ones(n_timepoints,n_timepoints) / n_timepoints;
+    p_t = ones(n_timepoints,n_timepoints);
     
     % define gaussian kernel to introduce scalar timing
 %     smearingkernel.win = opt.time;
@@ -138,12 +137,14 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
 %     end
 %     smearingkernel.pdfs = smearingkernel.pdfs ./ nansum(smearingkernel.pdfs,2);
 
-    p_t = normpdf(opt.time,opt.time',opt.time'+.1);
-    p_t(:,opt.time < 0) = 1;
-    p_t(isnan(p_t)) = 0;
-    p_t = p_t ./ nansum(p_t,1);
-%     figure; imagesc(p_t)
+%     p_t = normpdf(opt.time,opt.time',opt.time'+.1);
+%     p_t(:,opt.time < 0) = 1;
+%     p_t(isnan(p_t)) = 0;
     
+    % normalization
+    p_t = p_t ./ nansum(p_t,1);
+    
+    %
     log_p_t = log(p_t);
     
     %% construct posteriors
@@ -164,15 +165,12 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
                 continue;
             end
             
-            %
+            % compute posterior for the current time point
             p_tX = decode(...
                 x,X_edges,log_P_Xt,log_p_t(:,tt),n_features,n_timepoints);
-            p_tX_chance = decode(...
-                x,X_edges,log_P_Xt_shuffled,log_p_t(:,tt),n_features,n_timepoints);
             
-            %
+            % store posterior
             P_tX(tt,:,kk) = p_tX;
-            P_tX_chance(tt,:,kk) = p_tX_chance;
         end
         
 %         figure; hold on;
@@ -296,6 +294,47 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
         % posterior mean (aka COM)
         P_tX_kk(isnan(P_tX_kk)) = 0;
         pthat.mean(test_time_flags,kk) = opt.time * P_tX_kk';
+    end
+    
+    %% shuffles
+    
+    % iterate through shuffles
+    for ss = 1 : opt.n_shuffles
+        
+        % preallocation
+        P_tX_shuffle = nan(n_timepoints,n_timepoints,opt.test.n_trials);
+
+        % shuffle log-likelihoods along the time dimension
+        log_P_Xt_shuffled = log_P_Xt(randperm(n_timepoints),:,:);
+        
+        % iterate through test trials
+        for kk = 1 : opt.test.n_trials
+            if opt.verbose
+                progressreport(kk+(ss-1)*opt.test.n_trials,...
+                    opt.test.n_trials*opt.n_shuffles,'shuffling');
+            end
+            test_idx = opt.test.trial_idcs(kk);
+            
+            % iterate through time for the current test trial
+            for tt = 1 : n_timepoints
+                
+                % fetch current observations
+                x = X(tt,:,test_idx)';
+                if all(isnan(x))
+                    continue;
+                end
+                
+                % compute posterior for the current time point
+                p_tX = decode(...
+                    x,X_edges,log_P_Xt_shuffled,log_p_t(:,tt),n_features,n_timepoints);
+                
+                % store posterior
+                P_tX_shuffle(tt,:,kk) = p_tX;
+            end
+        end
+        
+        % add the posteriors of the current shuffle to the running average
+        P_tX_chance = P_tX_chance + P_tX_shuffle / opt.n_shuffles;
     end
 end
 
