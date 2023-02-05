@@ -122,7 +122,28 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
 %     end
     
     %% prior definition
-    p_t = ones(n_timepoints,1) / n_timepoints;
+    p_t = ones(n_timepoints,n_timepoints) / n_timepoints;
+    
+    % define gaussian kernel to introduce scalar timing
+%     smearingkernel.win = opt.time;
+%     smearingkernel.mus = smearingkernel.win';
+%     smearingkernel.sigs = smearingkernel.mus * .25 + 0;
+%     smearingkernel.pdfs = ...
+%         normpdf(smearingkernel.win,smearingkernel.mus,smearingkernel.sigs);
+%     I = eye(spkopt.time.roi.valid.len);
+%     for ii = 1 : spkopt.time.roi.valid.len
+%         if all(isnan(smearingkernel.pdfs(ii,:)))
+%             smearingkernel.pdfs(ii,:) = I(ii,:);
+%         end
+%     end
+%     smearingkernel.pdfs = smearingkernel.pdfs ./ nansum(smearingkernel.pdfs,2);
+
+    p_t = normpdf(opt.time,opt.time',opt.time'+.1);
+    p_t(:,opt.time < 0) = 1;
+    p_t(isnan(p_t)) = 0;
+    p_t = p_t ./ nansum(p_t,1);
+%     figure; imagesc(p_t)
+    
     log_p_t = log(p_t);
     
     %% construct posteriors
@@ -144,8 +165,10 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
             end
             
             %
-            p_tX = decode(x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints);
-            p_tX_chance = decode(x,X_edges,log_P_Xt_shuffled,log_p_t,n_features,n_timepoints);
+            p_tX = decode(...
+                x,X_edges,log_P_Xt,log_p_t(:,tt),n_features,n_timepoints);
+            p_tX_chance = decode(...
+                x,X_edges,log_P_Xt_shuffled,log_p_t(:,tt),n_features,n_timepoints);
             
             %
             P_tX(tt,:,kk) = p_tX;

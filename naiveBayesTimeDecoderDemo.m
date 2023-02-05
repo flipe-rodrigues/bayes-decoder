@@ -191,6 +191,7 @@ opt.train.n_trials = numel(opt.train.trial_idcs);
 opt.test.trial_idcs = trial_idcs(...
     ~ismember(trial_idcs,opt.train.trial_idcs));
 opt.test.n_trials = numel(opt.test.trial_idcs);
+opt.prior = 1;
 opt.n_shuffles = 1;
 opt.assumepoissonmdl = false;
 opt.verbose = true;
