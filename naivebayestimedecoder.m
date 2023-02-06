@@ -307,6 +307,14 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
         % shuffle log-likelihoods along the time dimension
         log_P_Xt_shuffled = log_P_Xt(randperm(n_timepoints),:,:);
         
+        %
+        X_shuffled = X;
+        for kk = opt.test.trial_idcs
+            nan_flags = any(isnan(X_shuffled(:,:,kk)),2);
+            X_shuffled(~nan_flags,:,kk) = ...
+                X_shuffled(randperm(sum(~nan_flags)),:,kk);
+        end
+        
         % iterate through test trials
         for kk = 1 : opt.test.n_trials
             if opt.verbose
@@ -319,14 +327,16 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
             for tt = 1 : n_timepoints
                 
                 % fetch current observations
-                x = X(tt,:,test_idx)';
+                x = X_shuffled(tt,:,test_idx)';
                 if all(isnan(x))
                     continue;
                 end
                 
                 % compute posterior for the current time point
                 p_tX = decode(...
-                    x,X_edges,log_P_Xt_shuffled,log_p_t(:,tt),n_features,n_timepoints);
+                    x,X_edges,log_P_Xt,log_p_t(:,tt),n_features,n_timepoints);
+%                 p_tX = decode(...
+%                     x,X_edges,log_P_Xt_shuffled,log_p_t(:,tt),n_features,n_timepoints);
                 
                 % store posterior
                 P_tX_shuffle(tt,:,kk) = p_tX;
