@@ -323,6 +323,9 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
             end
             test_idx = opt.test.trial_idcs(kk);
             
+            % shuffle log-likelihoods along the time dimension
+            log_P_Xt_shuffled = log_P_Xt(randperm(n_timepoints),:,:);
+            
             % iterate through time for the current test trial
             for tt = 1 : n_timepoints
                 
