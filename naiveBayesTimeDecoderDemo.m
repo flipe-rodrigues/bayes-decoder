@@ -182,6 +182,9 @@ R = R - min(R,[],'all');
 avgfun = @(x,d) nanmedian(x,d);
 errfun = @(x,d) quantile(x,[.25,.75],d) - nanmedian(x,d);
 
+%
+avgfun = @(x,d) nanmean(x,d);
+
 %% naive bayes decoder
 opt = struct();
 opt.n_xpoints = 100;
@@ -192,7 +195,7 @@ opt.test.trial_idcs = trial_idcs(...
     ~ismember(trial_idcs,opt.train.trial_idcs));
 opt.test.n_trials = numel(opt.test.trial_idcs);
 opt.prior = 1;
-opt.n_shuffles = 100;
+opt.n_shuffles = 10;
 opt.assumepoissonmdl = false;
 opt.verbose = true;
 
@@ -200,56 +203,6 @@ tic
 [P_tR,P_Rt,pthat,neurons,P_Rt_shuffled,P_tR_chance] = ...
     naivebayestimedecoder(R,opt);
 toc
-
-%% chance-level decoding
-% R_shuffled = R;
-% for kk = opt.test.trial_idcs
-%     nan_flags = any(isnan(R_shuffled(:,:,kk)),2);
-% 	R_shuffled(~nan_flags,:,kk) = ...
-%         R_shuffled(randperm(sum(~nan_flags)),:,kk);
-% end
-% 
-% tic
-% P_tR_shuffled = naivebayestimedecoder(R_shuffled,opt);
-% toc
-% 
-% % subtract chance-level decoding
-% p_tR_shuffled = avgfun(P_tR_shuffled,[1,3]);
-% p_tR_shuffled = p_tR_shuffled ./ nansum(p_tR_shuffled);
-% P_tR = P_tR - p_tR_shuffled;
-% P_tR = max(P_tR,0);
-% P_tR = P_tR ./ nansum(P_tR,2);
-% 
-% % figure initialization
-% figure(...
-%     'name','chance-level decoding',...
-%     'numbertitle','off',...
-%     'color','w');
-% 
-% % axes initialization
-% axes(...
-%     'xlim',[t(1),t(end)],...
-%     'ylim',[t(1),t(end)],...
-%     'xtick',unique([0,ti,tf,stimulus.set]),...
-%     'ytick',unique([0,ti,tf,stimulus.set]),...
-%     'xticklabel',num2cell(unique([0,ti,tf,stimulus.set]*stimulus.scaling/1e3)),...
-%     'yticklabel',num2cell(unique([0,ti,tf,stimulus.set]*stimulus.scaling/1e3)),...
-%     'fontsize',12,...
-%     'linewidth',2,...
-%     'layer','top',...
-%     'xcolor','k',...
-%     'ycolor','k',...
-%     'color','none',...
-%     'tickdir','out',...
-%     'nextplot','add',...
-%     'ticklength',[1,1]*.025,...
-%     'plotboxaspectratio',[1,1,1]);
-% xlabel('Real time (s)');
-% ylabel('Decoded time (s)');
-% 
-% % iterate through conditions
-% imagesc([t(1),t(end)],[t(1),t(end)],p_tR_shuffled');
-% plot(xlim,ylim,'--w');
 
 %% plot encoding models
 figure;
@@ -400,9 +353,9 @@ for cc = 1 : C
     
     %
     title(sps(2,cc),sprintf('condition: %.2f',condition_set(cc)));
-    p_cond = avgfun(P_tR_chance(:,:,y(opt.test.trial_idcs)==cc),3);
-    p_cond = p_cond ./ nansum(p_cond,2);
-    imagesc(sps(2,cc),[t(1),t(end)],[t(1),t(end)],p_cond',clims);
+    p_chance = avgfun(P_tR_chance(:,:,y(opt.test.trial_idcs)==cc),3);
+    p_chance = p_chance ./ nansum(p_chance,2);
+    imagesc(sps(2,cc),[t(1),t(end)],[t(1),t(end)],p_chance',clims);
     plot(sps(2,cc),xlim(sps(2,cc)),ylim(sps(2,cc)),'-k');
     plot(sps(2,cc),xlim(sps(2,cc)),ylim(sps(2,cc)),'--w');
 end

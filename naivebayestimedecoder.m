@@ -1,4 +1,4 @@
-function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
+function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
     naivebayestimedecoder(X,opt)
     %UNTITLED Summary of this function goes here
     %   Detailed explanation goes here
@@ -121,7 +121,7 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
 %     end
     
     %% prior definition
-    p_t = ones(n_timepoints,n_timepoints);
+%     p_t = ones(n_timepoints,n_timepoints);
     
     % define gaussian kernel to introduce scalar timing
 %     smearingkernel.win = opt.time;
@@ -140,10 +140,13 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
 %     p_t = normpdf(opt.time,opt.time',opt.time'+.1);
 %     p_t(:,opt.time < 0) = 1;
 %     p_t(isnan(p_t)) = 0;
-    
-    % normalization
-    p_t = p_t ./ nansum(p_t,1);
-    
+% 
+%     % normalization
+%     p_t = p_t ./ nansum(p_t,1);
+
+    %
+    p_t = ones(n_timepoints,1) / n_timepoints;
+
     %
     log_p_t = log(p_t);
     
@@ -167,7 +170,7 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
             
             % compute posterior for the current time point
             p_tX = decode(...
-                x,X_edges,log_P_Xt,log_p_t(:,tt),n_features,n_timepoints);
+                x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints);
             
             % store posterior
             P_tX(tt,:,kk) = p_tX;
@@ -302,19 +305,11 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
     for ss = 1 : opt.n_shuffles
         
         % preallocation
-        P_tX_shuffled = nan(n_timepoints,n_timepoints,opt.test.n_trials);
+        P_tX_shuff = nan(n_timepoints,n_timepoints,opt.test.n_trials);
 
         % shuffle log-likelihoods along the time dimension
-        log_P_Xt_shuffled = log_P_Xt(randperm(n_timepoints),:,:);
-        
-        %
-        X_shuffled = X;
-        for kk = opt.test.trial_idcs
-            nan_flags = any(isnan(X_shuffled(:,:,kk)),2);
-            X_shuffled(~nan_flags,:,kk) = ...
-                X_shuffled(randperm(sum(~nan_flags)),:,kk);
-        end
-        
+        log_P_Xt_shuff = log_P_Xt(randperm(n_timepoints),:,:);
+
         % iterate through test trials
         for kk = 1 : opt.test.n_trials
             if opt.verbose
@@ -322,10 +317,7 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
                     opt.test.n_trials*opt.n_shuffles,'shuffling');
             end
             test_idx = opt.test.trial_idcs(kk);
-            
-            % shuffle log-likelihoods along the time dimension
-%             log_P_Xt_shuffled = log_P_Xt(randperm(n_timepoints),:,:);
-            
+
             % iterate through time for the current test trial
             for tt = 1 : n_timepoints
                 
@@ -336,18 +328,16 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
                 end
                 
                 % compute posterior for the current time point
-%                 p_tX = decode(...
-%                     x,X_edges,log_P_Xt,log_p_t(:,tt),n_features,n_timepoints);
                 p_tX = decode(...
-                    x,X_edges,log_P_Xt_shuffled,log_p_t(:,tt),n_features,n_timepoints);
+                    x,X_edges,log_P_Xt_shuff,log_p_t,n_features,n_timepoints);
                 
                 % store posterior
-                P_tX_shuffled(tt,:,kk) = p_tX;
+                P_tX_shuff(tt,:,kk) = p_tX;
             end
         end
         
         % add the posteriors of the current shuffle to the running average
-        P_tX_chance = P_tX_chance + P_tX_shuffled / opt.n_shuffles;
+        P_tX_chance = P_tX_chance + P_tX_shuff / opt.n_shuffles;
     end
 end
 
@@ -379,7 +369,7 @@ function p_tX = decode(x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints)
     % compute posterior by summing over log-likelihoods
     log_p_tX = log_p_t + nansum(log_p_tx(~nan_flags,:))';
     
-    % convert back to probability
+    % exponentiate to get back to probability
     p_tX = exp(log_p_tX - nanmax(log_p_tX));
 
     % normalization
