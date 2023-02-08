@@ -302,7 +302,7 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
     for ss = 1 : opt.n_shuffles
         
         % preallocation
-        P_tX_shuffle = nan(n_timepoints,n_timepoints,opt.test.n_trials);
+        P_tX_shuffled = nan(n_timepoints,n_timepoints,opt.test.n_trials);
 
         % shuffle log-likelihoods along the time dimension
         log_P_Xt_shuffled = log_P_Xt(randperm(n_timepoints),:,:);
@@ -324,30 +324,30 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuffled,P_tX_chance] = ...
             test_idx = opt.test.trial_idcs(kk);
             
             % shuffle log-likelihoods along the time dimension
-            log_P_Xt_shuffled = log_P_Xt(randperm(n_timepoints),:,:);
+%             log_P_Xt_shuffled = log_P_Xt(randperm(n_timepoints),:,:);
             
             % iterate through time for the current test trial
             for tt = 1 : n_timepoints
                 
                 % fetch current observations
-                x = X_shuffled(tt,:,test_idx)';
+                x = X(tt,:,test_idx)';
                 if all(isnan(x))
                     continue;
                 end
                 
                 % compute posterior for the current time point
-                p_tX = decode(...
-                    x,X_edges,log_P_Xt,log_p_t(:,tt),n_features,n_timepoints);
 %                 p_tX = decode(...
-%                     x,X_edges,log_P_Xt_shuffled,log_p_t(:,tt),n_features,n_timepoints);
+%                     x,X_edges,log_P_Xt,log_p_t(:,tt),n_features,n_timepoints);
+                p_tX = decode(...
+                    x,X_edges,log_P_Xt_shuffled,log_p_t(:,tt),n_features,n_timepoints);
                 
                 % store posterior
-                P_tX_shuffle(tt,:,kk) = p_tX;
+                P_tX_shuffled(tt,:,kk) = p_tX;
             end
         end
         
         % add the posteriors of the current shuffle to the running average
-        P_tX_chance = P_tX_chance + P_tX_shuffle / opt.n_shuffles;
+        P_tX_chance = P_tX_chance + P_tX_shuffled / opt.n_shuffles;
     end
 end
 
