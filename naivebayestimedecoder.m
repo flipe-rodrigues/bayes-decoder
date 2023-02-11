@@ -300,6 +300,9 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
     end
     
     %% shuffles
+    if ~opt.shuffle
+        return;
+    end
     
     % iterate through shuffles
     for ss = 1 : opt.n_shuffles
@@ -365,7 +368,11 @@ function p_tX = decode(x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints)
     if all(nan_flags)
         return;
     end
-
+    
+    %
+    log_p_tx = log_p_tx - nanmax(log_p_tx,[],2);
+    log_p_tx = log_p_tx ./ abs(nanmin(log_p_tx,[],2));
+    
     % compute posterior by summing over log-likelihoods
     log_p_tX = log_p_t + nansum(log_p_tx(~nan_flags,:))';
     
@@ -374,4 +381,8 @@ function p_tX = decode(x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints)
 
     % normalization
     p_tX = p_tX / nansum(p_tX);
+    
+    if any(isnan(p_tX))
+        a=1
+    end
 end
