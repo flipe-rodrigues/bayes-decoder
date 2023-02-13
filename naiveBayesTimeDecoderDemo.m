@@ -195,7 +195,8 @@ opt.test.trial_idcs = trial_idcs(...
     ~ismember(trial_idcs,opt.train.trial_idcs));
 opt.test.n_trials = numel(opt.test.trial_idcs);
 opt.prior = 1;
-opt.n_shuffles = 10;
+opt.shuffle = 1;
+opt.n_shuffles = 2;
 opt.assumepoissonmdl = false;
 opt.verbose = true;
 
@@ -264,7 +265,7 @@ for kk = randperm(opt.test.n_trials,100)
         opt.test.trial_idcs(kk),...
         stimuli(opt.test.trial_idcs(kk)),...
         condition_set(y(opt.test.trial_idcs(kk)))));
-    p_tR = squeeze(P_tR_chance(:,:,kk));
+    p_tR = squeeze(P_tR(:,:,kk));
     p_tR(isnan(p_tR)) = max(p_tR(:));
     imagesc([t(1),t(end)],[t(1),t(end)],p_tR');
     plot([1,1]*stimuli(opt.test.trial_idcs(kk)),ylim,'--w');
@@ -293,9 +294,6 @@ set(sps,...
     'plotboxaspectratio',[1,1,1]);
 linkaxes(sps);
 
-p_ctrl = avgfun(P_tR(:,:,ctrl_flags(opt.test.trial_idcs)),[1,3]);
-p_ctrl = p_ctrl ./ nansum(p_ctrl);
-
 % iterate through stimuli
 clims = quantile(P_tR(:),[0,.99]);
 for ii = 1 : stimulus.n
@@ -308,7 +306,6 @@ for ii = 1 : stimulus.n
     nan_flags = isnan(p_stim);
     p_stim = p_stim ./ nansum(p_stim,2);
     p_stim(nan_flags) = max([clims,max(p_stim,[],[1,2])]);
-    p_stim = p_stim - p_ctrl;
     imagesc(sps(ii),[t(1),t(end)],[t(1),t(end)],p_stim',clims);
     plot(sps(ii),xlim(sps(ii)),ylim(sps(ii)),'-k');
     plot(sps(ii),xlim(sps(ii)),ylim(sps(ii)),'--w');
