@@ -99,6 +99,10 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
         P_Xt(:,ff,:) = P_Xt(:,ff,:) ./ nansum(P_Xt(:,ff,:),3);
         P_Xt(:,ff,:) = P_Xt(:,ff,:) ./ nansum(P_Xt(:,ff,:),1);
 
+        if all(P_Xt(:,ff,:) == 0,2)
+            a=1
+        end
+        
         % update feature
         features(ff).x_mu = X_mus(:,ff);
         features(ff).p_Xc = squeeze(P_Xt(:,ff,:));
@@ -170,8 +174,10 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
             end
             
             % compute posterior for the current time point
-            p_tX = decode(...
-                x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints);
+%             p_tX = decode(...
+%                 x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints);
+            p_tX = decode2(...
+                x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints);
             
             % store posterior
             P_tX(tt,:,kk) = p_tX;
@@ -373,6 +379,48 @@ function p_tX = decode(x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints)
     %
     log_p_tx = log_p_tx - nanmax(log_p_tx,[],2);
     log_p_tx = log_p_tx ./ abs(nanmin(log_p_tx,[],2));
+    
+    % compute posterior by summing over log-likelihoods
+    log_p_tX = log_p_t + nansum(log_p_tx(~nan_flags,:))';
+    
+    % exponentiate to get back to probability
+    p_tX = exp(log_p_tX - nanmax(log_p_tX));
+
+    % normalization
+    p_tX = p_tX / nansum(p_tX);
+end
+
+function p_tX = decode2(x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints)
+
+    % index current observation
+    [~,x_idcs] = min(abs(X_edges(:,1:end-1) - x),[],2);
+
+    % preallocation
+%     p_tx = nan(n_features,n_timepoints);
+    log_p_tx = nan(n_features,n_timepoints);
+
+    % iterate through features
+    for ff = 1 : n_features
+
+        % assume empirical encoding model
+%         p_tx(ff,:) = P_Xt(:,ff,x_idcs(ff));
+        log_p_tx(ff,:) = log_P_Xt(:,ff,x_idcs(ff));
+    end
+    
+    % nan check
+    nan_flags = all(isnan(log_p_tx),2) | isnan(x);
+    if all(nan_flags)
+        return;
+    end
+    
+%     % normalization
+% %     log_p_tx = log_p_tx - nanmax(log_p_tx,[],2);
+% %     log_p_tx = log_p_tx ./ abs(nanmin(log_p_tx,[],2));
+%     p_tx = p_tx ./ nansum(p_tx,2);
+%     log_p_tx2 = log(p_tx);
+%     if ~all(log_p_tx == log_p_tx2);
+%         a=1
+%     end
     
     % compute posterior by summing over log-likelihoods
     log_p_tX = log_p_t + nansum(log_p_tx(~nan_flags,:))';
