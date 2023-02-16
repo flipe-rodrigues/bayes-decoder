@@ -88,7 +88,7 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
                 x_counts = histcounts2(1:n_timepoints,x(:,train_idx)',...
                     'xbinedges',1:n_timepoints+1,...
                     'ybinedges',x_edges);
-                p_Xc(:,kk,:) = conv2(x_kernel,x_kernel,x_counts,'same');
+                p_Xc(:,kk,:) = conv2(1,x_kernel,x_counts,'same');
             end
 
             % store average empirical joint distribution
@@ -96,11 +96,8 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
         end
 
         % normalization
-        P_Xt(:,ff,:) = P_Xt(:,ff,:) ./ nansum(P_Xt(:,ff,:),3);
-        
-%         if ff == 13
-%             a=1
-%         end
+%         P_Xt(:,ff,:) = P_Xt(:,ff,:) ./ nansum(P_Xt(:,ff,:),3);
+        P_Xt(:,ff,:) = P_Xt(:,ff,:) ./ nansum(P_Xt(:,ff,:),1);
         
         % nan fix
         nan_flags = squeeze(all(isnan(P_Xt(:,ff,:)),1));
@@ -114,7 +111,43 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
     %%
     log_P_Xt = log(P_Xt);
     
+    %% shuffling
+%     % preallocation
+%     shuffle_idcs = nan(n_timepoints,opt.test.n_trials,opt.shuffle.n);
+%     
+%     % sample shuffled time indices
+%     for ss = 1 : opt.shuffle.n
+%         if opt.verbose
+%             progressreport(ss,opt.shuffle.n,'sampling shuffled indices');
+%         end
+%         shuffle_idcs(:,:,ss) = cell2mat(arrayfun(@(x)randperm(x),...
+%             repmat(n_timepoints,opt.test.n_trials,1),...
+%             'uniformoutput',false))';
+%     end
+    
     %% prior definition
+%     p_t = ones(n_timepoints,n_timepoints);
+    
+    % define gaussian kernel to introduce scalar timing
+%     smearingkernel.win = opt.time;
+%     smearingkernel.mus = smearingkernel.win';
+%     smearingkernel.sigs = smearingkernel.mus * .25 + 0;
+%     smearingkernel.pdfs = ...
+%         normpdf(smearingkernel.win,smearingkernel.mus,smearingkernel.sigs);
+%     I = eye(spkopt.time.roi.valid.len);
+%     for ii = 1 : spkopt.time.roi.valid.len
+%         if all(isnan(smearingkernel.pdfs(ii,:)))
+%             smearingkernel.pdfs(ii,:) = I(ii,:);
+%         end
+%     end
+%     smearingkernel.pdfs = smearingkernel.pdfs ./ nansum(smearingkernel.pdfs,2);
+
+%     p_t = normpdf(opt.time,opt.time',opt.time'+.1);
+%     p_t(:,opt.time < 0) = 1;
+%     p_t(isnan(p_t)) = 0;
+% 
+%     % normalization
+%     p_t = p_t ./ nansum(p_t,1);
 
     %
     p_t = ones(n_timepoints,1) / n_timepoints;
@@ -150,6 +183,108 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
             P_tX(tt,:,kk) = p_tX;
         end
         
+%         figure; hold on;
+%         p_x = nan(n_timepoints,opt.shuffle.n);
+% 
+%         nan_flags = any(isnan(X(:,:,kk)),2);
+%         shuffles = randsample(sum(~nan_flags),opt.shuffle.n,true);
+%         
+%         %
+%         for ss = 1 : opt.shuffle.n
+%             if opt.verbose
+%                 progressreport(ss,opt.shuffle.n,'shuffling');
+%             end
+%             
+%             % fetch shuffled observations
+%             x = X(shuffles(ss),:,test_idx)';
+%             if all(isnan(x))
+%                 continue;
+%             end
+% 
+%             p_x(:,ss) = predictnaivebayestimedecoder(...
+%                 x,X_edges,P_Xt,p_t,n_features,n_timepoints);
+%         end
+%         
+%         plot(opt.time,nanmean(p_x,2),'--k','linewidth',1.5);
+%         plot(opt.time,nanmedian(p_x,2),'k','linewidth',1.5);
+%         plot(opt.time,quantile(p_x,.25,2),'r','linewidth',1.5);
+%         plot(opt.time,quantile(p_x,.95,2),'b','linewidth',1.5);
+%         a=1;
+%         continue;
+
+%             % compute likelihoods of the current observations
+%             if opt.assumepoissonmdl
+% 
+%                 % assume a features are poisson-distributed
+%                 p_tx = poisspdf(X_mus',round(x));
+%             else
+% 
+%                 % index current observation
+%                 x_edges = vertcat(features.x_edges);
+%                 [~,x_idcs] = min(abs(x_edges(:,1:end-1) - x),[],2);
+% 
+%                 % preallocation
+%                 p_tx = nan(n_features,n_timepoints);
+%                 p_x = nan(n_features,n_timepoints,opt.shuffle.n);
+% 
+%                 % iterate through features
+%                 for ff = 1 : n_features
+% 
+%                     % assume empirical encoding model
+%                     p_tx(ff,:) = P_Xt(:,ff,x_idcs(ff));
+%                     
+%                     % iterate through shuffles
+%                     for ss = 1 : opt.shuffle.n
+%                         
+%                         % assume empirical encoding model
+%                         p_x(ff,:,ss) = P_Xt(shuffle_idcs(:,test_idx,ss),ff,x_idcs(ff));
+%                     end
+%                 end
+%             end
+% 
+%             figure;
+%             hold on;
+%             p_tX = prod(p_tx);
+%             p_tX = p_tX ./ nansum(p_tX);
+%             plot(p_tX);
+% 
+%             p_X = squeeze(prod(p_x));
+%             p_X = p_X ./ nansum(p_X);
+%             p_X_median = median(p_X,[1,2]);
+%             p_X_mad = mad(p_X,0,[1,2]);
+%             
+%             plot(nanmean(p_X,2));
+%             plot(xlim,[1,1]*mean(p_X,[1,2]));
+%             plot(xlim,[1,1]*median(p_X,[1,2]),'k','linewidth',1);
+%             plot(xlim,[1,1]*(median(p_X,[1,2]) + mad(p_X,0,[1,2])));
+%             plot(xlim,[1,1]*(median(p_X,[1,2]) - mad(p_X,0,[1,2])));
+%             a=1
+%             
+%             % normalization
+%             p_tx = p_tx ./ nansum(p_tx,2);
+%             nan_flags = all(isnan(p_tx),2) | isnan(x);
+%             if all(nan_flags)
+%                 continue;
+%             end
+% 
+%             % compute posterior (accounting for numerical precision issues)
+%             fudge = 1 + 1 / n_features;
+%             p_tX = p_t .* prod(p_tx(~nan_flags,:) * n_timepoints)'; % * n_timepoints + fudge,1)';
+% 
+%             % normalization
+%             P_tX(tt,:,kk) = p_tX / nansum(p_tX);
+%             
+%             %
+%             p_X = squeeze(prod(p_x));
+%             p_X = p_X ./ nansum(p_X);
+%             p_X_median = median(p_X,[1,2]);
+%             p_X_mad = mad(p_X,0,[1,2]);
+% %             mask(tt,:,kk) = ...
+% %                 P_tX(tt,:,kk) >= p_X_median + p_X_mad | ...
+% %                 P_tX(tt,:,kk) <= p_X_median - p_X_mad;
+%             mask(tt,:,kk) = p_X;
+%         end
+
         % flag valid time for the current trial
         test_time_flags = ~all(isnan(P_tX(:,:,kk)),2);
 
@@ -277,10 +412,6 @@ function p_tX = decode2(x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints)
     if all(nan_flags)
         return;
     end
-    
-    % inf check
-    inf_flags = isinf(log_p_tx);
-    log_p_tx(inf_flags) = nan;
     
 %     % normalization
 % %     log_p_tx = log_p_tx - nanmax(log_p_tx,[],2);
