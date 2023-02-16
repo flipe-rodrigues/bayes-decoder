@@ -46,7 +46,7 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
         features(ff).x_bw = range(x_bounds) / 10;
     end
     
-    %
+    % concatenate feature supports
     X_edges = vertcat(features.x_edges);
 
     %% construct encoding models
@@ -96,13 +96,13 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
         end
 
         % normalization
-        P_Xt(:,ff,:) = P_Xt(:,ff,:) ./ nansum(P_Xt(:,ff,:),3);
+%         P_Xt(:,ff,:) = P_Xt(:,ff,:) ./ nansum(P_Xt(:,ff,:),3);
         P_Xt(:,ff,:) = P_Xt(:,ff,:) ./ nansum(P_Xt(:,ff,:),1);
-
-        if all(P_Xt(:,ff,:) == 0,2)
-            a=1
-        end
         
+        % nan fix
+        nan_flags = squeeze(all(isnan(P_Xt(:,ff,:)),1));
+        P_Xt(:,ff,nan_flags) = 1 / n_timepoints;
+
         % update feature
         features(ff).x_mu = X_mus(:,ff);
         features(ff).p_Xc = squeeze(P_Xt(:,ff,:));
