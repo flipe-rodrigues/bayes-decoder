@@ -14,6 +14,8 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
     features = cell2mat(features);
     X_mus = nan(n_timepoints,n_features);
     P_Xt = nan(n_timepoints,n_features,opt.n_xpoints);
+    P_Xt_med = nan(n_timepoints,n_features,opt.n_xpoints);
+    P_Xt_ks = nan(n_timepoints,n_features,opt.n_xpoints);
     P_tX = nan(n_timepoints,n_timepoints,opt.test.n_trials);
     P_tX_chance = zeros(n_timepoints,n_timepoints,opt.test.n_trials);
     pthat.mode = nan(n_timepoints,opt.test.n_trials);
@@ -39,11 +41,15 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
         x_bounds = quantile(x(:),[0,1]+[1,-1]*.001).*(1+[-1,1]*.025);
         [~,x_edges] = histcounts(x(x>=x_bounds(1)&x<=x_bounds(2)),opt.n_xpoints);
 
+        % estimate feature bandwidth
+%         [~,~,bw] = ksdensity(x(:),x_edges);
+        
         % update feature
         features(ff).idx = ff;
         features(ff).x_bounds = x_bounds;
         features(ff).x_edges = x_edges;
         features(ff).x_bw = range(x_bounds) / 10;
+        features(ff).x_bw2 = 1;
     end
     
     % concatenate feature supports
@@ -79,33 +85,74 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
 
             % preallocation
             p_Xc = nan(n_timepoints,opt.train.n_trials,opt.n_xpoints);
-
+            p_Xc_ks = nan(n_timepoints,opt.train.n_trials,opt.n_xpoints);
+            
+            % iterate through time points
+            for tt = 1 : n_timepoints
+                
+                % kernel density estimation
+                p_Xc_ks(tt,ff,:) = ksdensity(x(tt,opt.train.trial_idcs),x_edges(1:end-1),...
+                    'bandwidth',features(ff).x_bw);
+            end
+            
             % iterate through training trials
             for kk = 1 : opt.train.n_trials
                 train_idx = opt.train.trial_idcs(kk);
-
+                
                 % compute likelihood
                 x_counts = histcounts2(1:n_timepoints,x(:,train_idx)',...
                     'xbinedges',1:n_timepoints+1,...
                     'ybinedges',x_edges);
-                p_Xc(:,kk,:) = conv2(x_kernel,x_kernel,x_counts,'same');
+                p_Xc(:,kk,:) = conv2(1,x_kernel,x_counts,'same');
+ 
+                % "crop" back to valid shape
+                nan_flags = isnan(x(:,train_idx));
+                p_Xc(nan_flags,kk,:) = nan;
             end
 
             % store average empirical joint distribution
             P_Xt(:,ff,:) = nanmean(p_Xc,2);
+            P_Xt_med(:,ff,:) = nanmedian(p_Xc,2);
+            P_Xt_ks(:,ff,:) = nanmean(p_Xc_ks,2);
         end
 
+        % zero fix
+        P_Xt_min = min(squeeze(P_Xt(:,ff,:)),[],1);
+        epsilon = min(P_Xt_min(P_Xt_min>0),[],'all');
+        P_Xt(:,ff,:) = P_Xt(:,ff,:) + epsilon;
+        
         % normalization
         P_Xt(:,ff,:) = P_Xt(:,ff,:) ./ nansum(P_Xt(:,ff,:),3);
         
 %         if ff == 13
 %             a=1
 %         end
-        
-        % nan fix
-        nan_flags = squeeze(all(isnan(P_Xt(:,ff,:)),1));
-        P_Xt(:,ff,nan_flags) = 1 / n_timepoints;
 
+        features(ff)
+        figure('position',[1.8000 41.8000 1.0224e+03 472.8000]);
+        subplot(1,3,1); hold on;
+        a=squeeze(P_Xt(:,ff,:)); imagesc(opt.time,[],a'); axis tight;
+        subplot(1,3,2); hold on;
+        b=squeeze(P_Xt_med(:,ff,:)); imagesc(opt.time,[],b'); axis tight;
+        subplot(1,3,3); hold on;
+        c=squeeze(P_Xt_ks(:,ff,:)); imagesc(opt.time,[],c'); axis tight;
+        a=1
+        
+%         figure('position',[1.8000 41.8000 1.0224e+03 472.8000]);
+%         a = squeeze(P_Xt(:,ff,:));
+%         subplot(1,4,1); hold on;
+%         imagesc(a'); axis tight;
+%         subplot(1,4,2); hold on;
+%         imagesc((a==0)'); axis tight;
+%         subplot(1,4,3); hold on;
+%         imagesc(isnan(a)'); axis tight;
+%         subplot(1,4,4); hold on;
+%         imagesc(isinf(a)'); axis tight;
+%         
+%         % nan fix
+%         nan_flags = all(isnan(squeeze(P_Xt(:,ff,:))),1);
+%         P_Xt(:,ff,nan_flags) = 1 / n_validtimepoints;
+%         
         % update feature
         features(ff).x_mu = X_mus(:,ff);
         features(ff).p_Xc = squeeze(P_Xt(:,ff,:));
@@ -261,14 +308,14 @@ function p_tX = decode2(x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints)
     [~,x_idcs] = min(abs(X_edges(:,1:end-1) - x),[],2);
 
     % preallocation
-%     p_tx = nan(n_features,n_timepoints);
+    p_tx = nan(n_features,n_timepoints);
     log_p_tx = nan(n_features,n_timepoints);
 
     % iterate through features
     for ff = 1 : n_features
 
         % assume empirical encoding model
-%         p_tx(ff,:) = P_Xt(:,ff,x_idcs(ff));
+        p_tx(ff,:) = P_Xt(:,ff,x_idcs(ff));
         log_p_tx(ff,:) = log_P_Xt(:,ff,x_idcs(ff));
     end
     
@@ -292,7 +339,7 @@ function p_tX = decode2(x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints)
 %     end
     
     % compute posterior by summing over log-likelihoods
-    log_p_tX = log_p_t + nansum(log_p_tx(~nan_flags,:))';
+    log_p_tX = log_p_t + sum(log_p_tx(~nan_flags,:))';
     
     % exponentiate to get back to probability
     p_tX = exp(log_p_tX - nanmax(log_p_tX));
@@ -300,7 +347,7 @@ function p_tX = decode2(x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints)
     % normalization
     p_tX = p_tX / nansum(p_tX);
     
-    if any(isnan(p_tX))
+    if all(isnan(p_tX))
         a=1
     end
 end
