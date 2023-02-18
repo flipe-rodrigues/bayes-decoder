@@ -87,12 +87,12 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
             for kk = 1 : opt.train.n_trials
                 train_idx = opt.train.trial_idcs(kk);
 
-                % compute likelihood
+                % compute 2D histogram
                 x_counts = histcounts2(1:n_timepoints,x(:,train_idx)',...
                     'xbinedges',1:n_timepoints+1,...
                     'ybinedges',x_edges);
                 
-                % !!!!!!!
+                % re-nan what was nan before computing the 2D histogram
                 nan_flags = isnan(x(:,train_idx));
                 x_counts(nan_flags,:) = nan;
 
