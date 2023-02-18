@@ -81,7 +81,7 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
 
             % preallocation
             p_Xc = nan(n_timepoints,opt.train.n_trials,opt.n_xpoints);
-            p_Xc_counts = nan(n_timepoints,opt.train.n_trials,opt.n_xpoints);
+            X_counts = nan(n_timepoints,opt.train.n_trials,opt.n_xpoints);
             
             % iterate through training trials
             for kk = 1 : opt.train.n_trials
@@ -95,41 +95,20 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
                 % !!!!!!!
                 nan_flags = isnan(x(:,train_idx));
                 x_counts(nan_flags,:) = nan;
-                
-                % feature smoothing
-                p_Xc(:,kk,:) = conv2(1,x_kernel,x_counts,'same');
 
-                % "crop" back to valid shape
-                nan_flags = isnan(x(:,train_idx));
-                p_Xc(nan_flags,kk,:) = nan;
-                
                 %
-                p_Xc_counts(:,kk,:) = x_counts;
+                X_counts(:,kk,:) = x_counts;
             end
 
             % store average empirical joint distribution
-            P_Xt(:,ff,:) = nanmean(p_Xc,2);
-            P_Xt_med(:,ff,:) = nanmedian(p_Xc,2);
-            P_Xt_counts(:,ff,:) = nanmean(p_Xc_counts,2);
+            P_Xt_counts(:,ff,:) = nanmean(X_counts,2);
         end
 
-        % zero fix (to prevent -inf issues when "logging")
-        P_Xt_min = min(squeeze(P_Xt(:,ff,:)),[],1);
-        epsilon = min(P_Xt_min(P_Xt_min>0),[],'all');
-        P_Xt(:,ff,:) = P_Xt(:,ff,:) + epsilon;
-        
-        % normalization
-        no_norm_test = squeeze(P_Xt(:,ff,:));
-        P_Xt(:,ff,:) = P_Xt(:,ff,:) ./ nansum(P_Xt(:,ff,:),3);
-        
         %
         bah = squeeze(P_Xt_counts(:,ff,:));
         bah = padarray(bah,[1,0]*opt.n_xpoints/2,'replicate','both');
         bah = padarray(bah,[0,1]*opt.n_xpoints/2,0,'both');
-%         bah = padarray(bah,[1,1]*opt.n_xpoints/2,'symmetric','both');
-%         figure; imagesc(bah'); set(gca,'ydir','normal')
         post_avg_smoothing = conv2(x_kernel,x_kernel,bah,'valid');
-%         figure; imagesc(post_avg_smoothing'); set(gca,'ydir','normal')
 
 %         figure('position',[1.8000 41.8000 1.0224e+03 472.8000]);
 %         subplot(2,2,1); hold on;
@@ -143,10 +122,11 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
 %         a=1
         
         P_Xt(:,ff,:) = post_avg_smoothing;
-%         
-%         % nan fix
-%         nan_flags = all(isnan(squeeze(P_Xt(:,ff,:))),1);
-%         P_Xt(:,ff,nan_flags) = 1 / n_validtimepoints;
+        
+        % zero fix (to prevent -inf issues when "logging" afterwards)
+        P_Xt_min = min(squeeze(P_Xt(:,ff,:)),[],1);
+        epsilon = min(P_Xt_min(P_Xt_min>0),[],'all');
+        P_Xt(:,ff,:) = P_Xt(:,ff,:) + epsilon;
 %         
         % update feature
         features(ff).x_mu = X_mus(:,ff);
@@ -342,7 +322,7 @@ function p_tX = decode2(x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints)
     % normalization
     p_tX = p_tX / nansum(p_tX);
     
-    if all(isnan(p_tX))
+    if any(isnan(p_tX))
         a=1
     end
 end
