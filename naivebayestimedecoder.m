@@ -50,43 +50,42 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
     
     % concatenate feature supports
     X_edges = vertcat(features.x_edges);
-
+    
     %% construct encoding models
-
+    
     % iterate through features
     for ff = 1 : n_features
         if opt.verbose
             progressreport(ff,n_features,'constructing encoding models');
         end
-
+        
         % parse feature
         x = squeeze(X(:,ff,:));
         x_bounds = features(ff).x_bounds;
         x_edges = features(ff).x_edges;
         x_bw = features(ff).x_bw;
-
+        
         % compute tuning function
         X_mus(:,ff) = nanmean(x(:,opt.train.trial_idcs),2);
-
+        
         % kernel definition
         x_kernel = normpdf(x_edges,mean(x_bounds),x_bw);
         x_kernel = x_kernel / nansum(x_kernel);
-
+        
         % compute joint distribution
         if opt.assumepoissonmdl
-
+            
             % store theoretical joint distribution
             P_Xt(:,ff,:) = poisspdf(X_mus(:,ff),x_edges(1:end-1));
         else
-
+            
             % preallocation
-            p_Xc = nan(n_timepoints,opt.train.n_trials,opt.n_xpoints);
             X_counts = nan(n_timepoints,opt.train.n_trials,opt.n_xpoints);
             
             % iterate through training trials
             for kk = 1 : opt.train.n_trials
                 train_idx = opt.train.trial_idcs(kk);
-
+                
                 % compute 2D histogram
                 x_counts = histcounts2(1:n_timepoints,x(:,train_idx)',...
                     'xbinedges',1:n_timepoints+1,...
@@ -95,63 +94,46 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
                 % re-nan what was nan before computing the 2D histogram
                 nan_flags = isnan(x(:,train_idx));
                 x_counts(nan_flags,:) = nan;
-
-                %
+                
+                % store current trial
                 X_counts(:,kk,:) = x_counts;
             end
-
+            
             % store average empirical joint distribution
-            P_Xt_counts(:,ff,:) = nanmean(X_counts,2);
+            P_Xt(:,ff,:) = ...
+                nanconv2(squeeze(nanmean(X_counts,2)),x_kernel,x_kernel);
         end
-
-        %
-        bah = squeeze(P_Xt_counts(:,ff,:));
-        bah = padarray(bah,[1,0]*opt.n_xpoints/2,'replicate','both');
-        bah = padarray(bah,[0,1]*opt.n_xpoints/2,0,'both');
-        post_avg_smoothing = conv2(x_kernel,x_kernel,bah,'valid');
-        post_avg_smoothing2 = nanconv2(squeeze(P_Xt_counts(:,ff,:)),x_kernel,x_kernel);
-
-%         figure('position',[1.8000 41.8000 1.0224e+03 1.0288e+03]);
-%         subplot(3,1,1); hold on;
-%         b=post_avg_smoothing; imagesc(opt.time,[],b'); axis tight;
-%         subplot(3,1,2); hold on;
-%         c=squeeze(P_Xt_counts(:,ff,:)); imagesc(opt.time,[],c'); axis tight;
-%         subplot(3,1,3); hold on;
-%         c=post_avg_smoothing2; imagesc(opt.time,[],c'); axis tight;
-%         a=1
-        
-        P_Xt(:,ff,:) = post_avg_smoothing2;
         
         % zero fix (to prevent -inf issues when "logging" afterwards)
         P_Xt_min = min(squeeze(P_Xt(:,ff,:)),[],1);
         epsilon = min(P_Xt_min(P_Xt_min>0),[],'all');
         P_Xt(:,ff,:) = P_Xt(:,ff,:) + epsilon;
-%         
+        
         % update feature
         features(ff).x_mu = X_mus(:,ff);
         features(ff).p_Xc = squeeze(P_Xt(:,ff,:));
     end
-
+    
     %%
     log_P_Xt = log(P_Xt);
     
     %% prior definition
-
+    
     %
     p_t = ones(n_timepoints,1) / n_timepoints;
-
+    
     %
     log_p_t = log(p_t);
     
     %% construct posteriors
-
+    
     % iterate through test trials
     for kk = 1 : opt.test.n_trials
         if opt.verbose
             progressreport(kk,opt.test.n_trials,'constructing posteriors');
         end
         test_idx = opt.test.trial_idcs(kk);
-
+        
         % iterate through time for the current test trial
         for tt = 1 : n_timepoints
 
@@ -321,7 +303,7 @@ function p_tX = decode2(x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints)
     % normalization
     p_tX = p_tX / nansum(p_tX);
     
-    if any(isnan(p_tX))
-        a=1
-    end
+%     if any(isnan(p_tX))
+%         a=1
+%     end
 end
