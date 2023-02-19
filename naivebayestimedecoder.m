@@ -109,19 +109,18 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
         bah = padarray(bah,[1,0]*opt.n_xpoints/2,'replicate','both');
         bah = padarray(bah,[0,1]*opt.n_xpoints/2,0,'both');
         post_avg_smoothing = conv2(x_kernel,x_kernel,bah,'valid');
+        post_avg_smoothing2 = nanconv2(squeeze(P_Xt_counts(:,ff,:)),x_kernel,x_kernel);
 
-%         figure('position',[1.8000 41.8000 1.0224e+03 472.8000]);
-%         subplot(2,2,1); hold on;
-%         a=no_norm_test; imagesc(opt.time,[],a'); axis tight;
-%         subplot(2,2,2); hold on;
-%         a=squeeze(P_Xt(:,ff,:)); imagesc(opt.time,[],a'); axis tight;
-%         subplot(2,2,3); hold on;
+%         figure('position',[1.8000 41.8000 1.0224e+03 1.0288e+03]);
+%         subplot(3,1,1); hold on;
 %         b=post_avg_smoothing; imagesc(opt.time,[],b'); axis tight;
-%         subplot(2,2,4); hold on;
+%         subplot(3,1,2); hold on;
 %         c=squeeze(P_Xt_counts(:,ff,:)); imagesc(opt.time,[],c'); axis tight;
+%         subplot(3,1,3); hold on;
+%         c=post_avg_smoothing2; imagesc(opt.time,[],c'); axis tight;
 %         a=1
         
-        P_Xt(:,ff,:) = post_avg_smoothing;
+        P_Xt(:,ff,:) = post_avg_smoothing2;
         
         % zero fix (to prevent -inf issues when "logging" afterwards)
         P_Xt_min = min(squeeze(P_Xt(:,ff,:)),[],1);
