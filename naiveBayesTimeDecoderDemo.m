@@ -1,6 +1,6 @@
 %% initialization
 warning('off');
-% close all;
+close all;
 clear;
 clc;
 
@@ -196,7 +196,7 @@ opt.test.trial_idcs = trial_idcs(...
 opt.test.n_trials = numel(opt.test.trial_idcs);
 opt.prior = 1;
 opt.shuffle = 1;
-opt.n_shuffles = 2;
+opt.n_shuffles = 10;
 opt.assumepoissonmdl = false;
 opt.verbose = true;
 

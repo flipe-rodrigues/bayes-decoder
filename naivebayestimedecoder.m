@@ -146,7 +146,7 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
             % compute posterior for the current time point
 %             p_tX = decode(...
 %                 x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints);
-            p_tX = decode2(...
+            p_tX = decode(...
                 x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints);
             
             % store posterior
@@ -186,7 +186,9 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
         P_tX_shuff = nan(n_timepoints,n_timepoints,opt.test.n_trials);
 
         % shuffle log-likelihoods along the time dimension
-        log_P_Xt_shuff = log_P_Xt(randperm(n_timepoints),:,:);
+        shuffle_idcs = randperm(n_timepoints);
+        P_Xt_shuff = P_Xt(shuffle_idcs,:,:);
+        log_P_Xt_shuff = log_P_Xt(shuffle_idcs,:,:);
 
         % iterate through test trials
         for kk = 1 : opt.test.n_trials
@@ -207,7 +209,15 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
                 
                 % compute posterior for the current time point
                 p_tX = decode(...
-                    x,X_edges,log_P_Xt_shuff,log_p_t,n_features,n_timepoints);
+                    x,X_edges,P_Xt_shuff,log_P_Xt_shuff,log_p_t,n_features,n_timepoints);
+                
+%                 if ismember(tt,[200,300,400,600,800])
+%                     p_tX2 = decode(...
+%                         x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints);
+%                     figure('position',[1.8000 41.8000 1.0224e+03 472.8000]);
+%                     plot(opt.time,p_tX,opt.time,p_tX2);
+%                     a=1
+%                 end
                 
                 % store posterior
                 P_tX_shuff(tt,:,kk) = p_tX;
@@ -223,42 +233,7 @@ function mdl = train(X,opt)
 
 end
 
-function p_tX = decode(x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints)
-
-    % index current observation
-    [~,x_idcs] = min(abs(X_edges(:,1:end-1) - x),[],2);
-
-    % preallocation
-    log_p_tx = nan(n_features,n_timepoints);
-
-    % iterate through features
-    for ff = 1 : n_features
-
-        % assume empirical encoding model
-        log_p_tx(ff,:) = log_P_Xt(:,ff,x_idcs(ff));
-    end
-    
-    % nan check
-    nan_flags = all(isnan(log_p_tx),2) | isnan(x);
-    if all(nan_flags)
-        return;
-    end
-    
-    %
-    log_p_tx = log_p_tx - nanmax(log_p_tx,[],2);
-    log_p_tx = log_p_tx ./ abs(nanmin(log_p_tx,[],2));
-    
-    % compute posterior by summing over log-likelihoods
-    log_p_tX = log_p_t + nansum(log_p_tx(~nan_flags,:))';
-    
-    % exponentiate to get back to probability
-    p_tX = exp(log_p_tX - nanmax(log_p_tX));
-
-    % normalization
-    p_tX = p_tX / nansum(p_tX);
-end
-
-function p_tX = decode2(x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints)
+function p_tX = decode(x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints)
 
     % index current observation
     [~,x_idcs] = min(abs(X_edges(:,1:end-1) - x),[],2);
