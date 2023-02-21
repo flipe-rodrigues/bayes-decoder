@@ -183,7 +183,7 @@ avgfun = @(x,d) nanmedian(x,d);
 errfun = @(x,d) quantile(x,[.25,.75],d) - nanmedian(x,d);
 
 %
-avgfun = @(x,d) nanmean(x,d);
+% avgfun = @(x,d) nanmean(x,d);
 
 %% naive bayes decoder
 opt = struct();
@@ -343,7 +343,7 @@ for cc = 1 : C
     %
     title(sps(1,cc),sprintf('condition: %.2f',condition_set(cc)));
     p_cond = avgfun(P_tR(:,:,y(opt.test.trial_idcs)==cc),3);
-    p_cond = p_cond ./ nansum(p_cond,2);
+%     p_cond = p_cond ./ nansum(p_cond,2);
     imagesc(sps(1,cc),[t(1),t(end)],[t(1),t(end)],p_cond',clims);
     plot(sps(1,cc),xlim(sps(1,cc)),ylim(sps(1,cc)),'-k');
     plot(sps(1,cc),xlim(sps(1,cc)),ylim(sps(1,cc)),'--w');
@@ -351,8 +351,8 @@ for cc = 1 : C
     %
     title(sps(2,cc),sprintf('condition: %.2f',condition_set(cc)));
     p_chance = avgfun(P_tR_chance(:,:,y(opt.test.trial_idcs)==cc),3);
-    p_chance = p_chance ./ nansum(p_chance,2);
-    imagesc(sps(2,cc),[t(1),t(end)],[t(1),t(end)],p_chance',clims);
+%     p_chance = p_chance ./ nansum(p_chance,2);
+    imagesc(sps(2,cc),[t(1),t(end)],[t(1),t(end)],p_chance');
     plot(sps(2,cc),xlim(sps(2,cc)),ylim(sps(2,cc)),'-k');
     plot(sps(2,cc),xlim(sps(2,cc)),ylim(sps(2,cc)),'--w');
 end

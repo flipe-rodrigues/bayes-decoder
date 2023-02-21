@@ -102,6 +102,15 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
             % store average empirical joint distribution
             P_Xt(:,ff,:) = ...
                 nanconv2(squeeze(nanmean(X_counts,2)),x_kernel,x_kernel);
+        
+            %%
+%             Z = squeeze(nanmean(X_counts,2));
+%             [X,Y] = meshgrid(1:opt.n_xpoints,1:n_timepoints); 
+%             tic
+%             f = fit([X(:),Y(:)],Z(:),'lowess',...
+%                 'robust','lar');
+%             toc
+%             plot(f,[X(:) Y(:)],Z(:))
         end
         
         % zero fix (to prevent -inf issues when "logging" afterwards)
@@ -184,12 +193,23 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
         
         % preallocation
         P_tX_shuff = nan(n_timepoints,n_timepoints,opt.test.n_trials);
-
-        % shuffle log-likelihoods along the time dimension
+        
         shuffle_idcs = randperm(n_timepoints);
         P_Xt_shuff = P_Xt(shuffle_idcs,:,:);
         log_P_Xt_shuff = log_P_Xt(shuffle_idcs,:,:);
-
+        
+%         P_Xt_shuff = nan(n_timepoints,n_features,opt.n_xpoints);
+%         for ff = 1 : n_features
+%             
+%             % shuffle log-likelihoods along the time dimension
+%             shuffle_idcs = randperm(n_timepoints);
+%             P_Xt_shuff(:,ff,:) = P_Xt(shuffle_idcs,ff,:);
+%         end
+%         % shuffle log-likelihoods along the time dimension
+% %         shuffle_idcs = randperm(n_timepoints);
+% %         P_Xt_shuff = P_Xt(shuffle_idcs,:,:);
+%         log_P_Xt_shuff = log(P_Xt_shuff);
+        
         % iterate through test trials
         for kk = 1 : opt.test.n_trials
             if opt.verbose
@@ -206,16 +226,17 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
                 if all(isnan(x))
                     continue;
                 end
-                
+
                 % compute posterior for the current time point
                 p_tX = decode(...
                     x,X_edges,P_Xt_shuff,log_P_Xt_shuff,log_p_t,n_features,n_timepoints);
                 
-%                 if ismember(tt,[200,300,400,600,800])
+%                 if ismember(tt,[50,100,200,300,400])
 %                     p_tX2 = decode(...
 %                         x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints);
 %                     figure('position',[1.8000 41.8000 1.0224e+03 472.8000]);
-%                     plot(opt.time,p_tX,opt.time,p_tX2);
+%                     plot(opt.time,p_tX,opt.time,p_tX2); hold on;
+%                     plot([1,1]*opt.time(tt),ylim,'k','linewidth',1); axis tight;
 %                     a=1
 %                 end
                 
