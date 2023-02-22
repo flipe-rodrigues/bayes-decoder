@@ -201,8 +201,7 @@ opt.assumepoissonmdl = false;
 opt.verbose = true;
 
 tic
-[P_tR,P_Rt,pthat,neurons,P_Rt_shuffled,P_tR_chance] = ...
-    naivebayestimedecoder(R,opt);
+[P_tR,P_Rt,pthat,neurons] = naivebayestimedecoder(R,opt);
 toc
 
 %% plot encoding models
@@ -228,7 +227,7 @@ for nn = 1 : N
     end
     ylim(r_bounds);
     title(sprintf('Neuron: %i, bw: %.2f',nn,r_bw));
-    p_Rt = squeeze(P_Rt(:,nn,:)); % neurons(nn).p_Xc;
+    p_Rt = squeeze(P_Rt(:,nn,:));
     p_Rt(isnan(p_Rt)) = max(p_Rt(:));
     imagesc([t(1),t(end)],r_bounds,p_Rt');
     plot(t,neurons(nn).x_mu,...
@@ -304,7 +303,6 @@ for ii = 1 : stimulus.n
         stimulus_flags(opt.test.trial_idcs);
     p_stim = avgfun(P_tR(:,:,trial_flags),3);
     nan_flags = isnan(p_stim);
-    p_stim = p_stim ./ nansum(p_stim,2);
     p_stim(nan_flags) = max([clims,max(p_stim,[],[1,2])]);
     imagesc(sps(ii),[t(1),t(end)],[t(1),t(end)],p_stim',clims);
     plot(sps(ii),xlim(sps(ii)),ylim(sps(ii)),'-k');
@@ -343,16 +341,14 @@ for cc = 1 : C
     %
     title(sps(1,cc),sprintf('condition: %.2f',condition_set(cc)));
     p_cond = avgfun(P_tR(:,:,y(opt.test.trial_idcs)==cc),3);
-%     p_cond = p_cond ./ nansum(p_cond,2);
     imagesc(sps(1,cc),[t(1),t(end)],[t(1),t(end)],p_cond',clims);
     plot(sps(1,cc),xlim(sps(1,cc)),ylim(sps(1,cc)),'-k');
     plot(sps(1,cc),xlim(sps(1,cc)),ylim(sps(1,cc)),'--w');
     
     %
     title(sps(2,cc),sprintf('condition: %.2f',condition_set(cc)));
-    p_chance = avgfun(P_tR_chance(:,:,y(opt.test.trial_idcs)==cc),3);
+%     p_chance = avgfun(P_tR_chance(:,:,y(opt.test.trial_idcs)==cc),3);
     p_chance = nanmean(p_cond,1);
-%     p_chance = p_chance ./ nansum(p_chance,2);
     imagesc(sps(2,cc),[t(1),t(end)],[t(1),t(end)],p_chance',clims);
     plot(sps(2,cc),xlim(sps(2,cc)),ylim(sps(2,cc)),'-k');
     plot(sps(2,cc),xlim(sps(2,cc)),ylim(sps(2,cc)),'--w');
@@ -361,8 +357,7 @@ for cc = 1 : C
     title(sps(3,cc),sprintf('condition: %.2f',condition_set(cc)));
     p_diff = p_cond - p_chance;
 %     p_diff(p_diff < 0) = 0;
-%     p_diff = p_diff ./ nansum(p_diff,2);
-    imagesc(sps(3,cc),[t(1),t(end)],[t(1),t(end)],p_diff',clims);
+    imagesc(sps(3,cc),[t(1),t(end)],[t(1),t(end)],p_diff');
     plot(sps(3,cc),xlim(sps(3,cc)),ylim(sps(3,cc)),'-k');
     plot(sps(3,cc),xlim(sps(3,cc)),ylim(sps(3,cc)),'--w');
 end
@@ -389,13 +384,11 @@ linkaxes(sps);
 
 % compute control mean
 p_ctrl = avgfun(P_tR(:,:,ctrl_flags(opt.test.trial_idcs)),3);
-p_ctrl = p_ctrl ./ nansum(p_ctrl,2);
 
 % iterate through conditions
 for cc = 1 : C
     title(sps(cc),sprintf('condition: %.2f - ctrl',condition_set(cc)));
     p_cond = avgfun(P_tR(:,:,y(opt.test.trial_idcs)==cc),3);
-    p_cond = p_cond ./ nansum(p_cond,2);
     p_diff = p_cond - p_ctrl;
     imagesc(sps(cc),[t(1),t(end)],[t(1),t(end)],p_diff',[-1,1]*C/T);
     plot(sps(cc),xlim(sps(cc)),ylim(sps(cc)),'-k');
