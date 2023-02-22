@@ -1,5 +1,4 @@
-function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
-    naivebayestimedecoder(X,opt)
+function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
     %UNTITLED Summary of this function goes here
     %   Detailed explanation goes here
 
