@@ -15,6 +15,7 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
     X_mus = nan(n_timepoints,n_features);
     P_Xt = nan(n_timepoints,n_features,opt.n_xpoints);
     P_tX = nan(n_timepoints,n_timepoints,opt.test.n_trials);
+    P_tX_chance = zeros(n_timepoints,n_timepoints,opt.test.n_trials);
     pthat.mode = nan(n_timepoints,opt.test.n_trials);
     pthat.median = nan(n_timepoints,opt.test.n_trials);
     pthat.mean = nan(n_timepoints,opt.test.n_trials);
@@ -164,6 +165,76 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
         P_tX_kk(isnan(P_tX_kk)) = 0;
         pthat.mean(test_time_flags,kk) = opt.time * P_tX_kk';
     end
+    
+    %% shuffles
+    if ~opt.shuffle
+        return;
+    end
+    
+    % iterate through shuffles
+    for ss = 1 : opt.n_shuffles
+        
+        % preallocation
+        P_tX_shuff = nan(n_timepoints,n_timepoints,opt.test.n_trials);
+        
+        shuffle_idcs = randperm(n_timepoints);
+        P_Xt_shuff = P_Xt(shuffle_idcs,:,:);
+        log_P_Xt_shuff = log_P_Xt(shuffle_idcs,:,:);
+        
+%         P_Xt_shuff = nan(n_timepoints,n_features,opt.n_xpoints);
+%         for ff = 1 : n_features
+%             
+%             % shuffle log-likelihoods along the time dimension
+%             shuffle_idcs = randperm(n_timepoints);
+%             P_Xt_shuff(:,ff,:) = P_Xt(shuffle_idcs,ff,:);
+%         end
+%         % shuffle log-likelihoods along the time dimension
+% %         shuffle_idcs = randperm(n_timepoints);
+% %         P_Xt_shuff = P_Xt(shuffle_idcs,:,:);
+%         log_P_Xt_shuff = log(P_Xt_shuff);
+        
+        % iterate through test trials
+        for kk = 1 : opt.test.n_trials
+            if opt.verbose
+                progressreport(kk+(ss-1)*opt.test.n_trials,...
+                    opt.test.n_trials*opt.n_shuffles,'shuffling');
+            end
+            test_idx = opt.test.trial_idcs(kk);
+
+            % iterate through time for the current test trial
+            for tt = 1 : n_timepoints
+                
+                % fetch current observations
+                x = X(tt,:,test_idx)';
+                if all(isnan(x))
+                    continue;
+                end
+
+                % compute posterior for the current time point
+                p_tX = decode(...
+                    x,X_edges,log_P_Xt_shuff,log_p_t,n_features,n_timepoints);
+                
+%                 if ismember(tt,[50,100,200,300,400])
+%                     p_tX2 = decode(...
+%                         x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints);
+%                     figure('position',[1.8000 41.8000 1.0224e+03 472.8000]);
+%                     plot(opt.time,p_tX,opt.time,p_tX2); hold on;
+%                     plot([1,1]*opt.time(tt),ylim,'k','linewidth',1); axis tight;
+%                     a=1
+%                 end
+                
+                % store posterior
+                P_tX_shuff(tt,:,kk) = p_tX;
+            end
+        end
+        
+        % add the posteriors of the current shuffle to the running average
+        P_tX_chance = P_tX_chance + P_tX_shuff / opt.n_shuffles;
+    end
+end
+
+function mdl = train(X,opt)
+
 end
 
 function p_tX = decode(x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints)
