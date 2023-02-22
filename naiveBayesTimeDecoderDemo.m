@@ -196,7 +196,7 @@ opt.test.trial_idcs = trial_idcs(...
 opt.test.n_trials = numel(opt.test.trial_idcs);
 opt.prior = 1;
 opt.shuffle = 1;
-opt.n_shuffles = 10;
+opt.n_shuffles = 1;
 opt.assumepoissonmdl = false;
 opt.verbose = true;
 
@@ -316,7 +316,7 @@ figure(...
     'name','condition-split posterior averages',...
     'numbertitle','off',...
     'windowstyle','docked');
-n_rows = 2;
+n_rows = 3;
 n_cols = C;
 sps = gobjects(n_rows,n_cols);
 for rr = 1 : n_rows
@@ -351,10 +351,20 @@ for cc = 1 : C
     %
     title(sps(2,cc),sprintf('condition: %.2f',condition_set(cc)));
     p_chance = avgfun(P_tR_chance(:,:,y(opt.test.trial_idcs)==cc),3);
+    p_chance = nanmean(p_cond,1);
 %     p_chance = p_chance ./ nansum(p_chance,2);
-    imagesc(sps(2,cc),[t(1),t(end)],[t(1),t(end)],p_chance');
+    imagesc(sps(2,cc),[t(1),t(end)],[t(1),t(end)],p_chance',clims);
     plot(sps(2,cc),xlim(sps(2,cc)),ylim(sps(2,cc)),'-k');
     plot(sps(2,cc),xlim(sps(2,cc)),ylim(sps(2,cc)),'--w');
+    
+    %
+    title(sps(3,cc),sprintf('condition: %.2f',condition_set(cc)));
+    p_diff = p_cond - p_chance;
+%     p_diff(p_diff < 0) = 0;
+%     p_diff = p_diff ./ nansum(p_diff,2);
+    imagesc(sps(3,cc),[t(1),t(end)],[t(1),t(end)],p_diff',clims);
+    plot(sps(3,cc),xlim(sps(3,cc)),ylim(sps(3,cc)),'-k');
+    plot(sps(3,cc),xlim(sps(3,cc)),ylim(sps(3,cc)),'--w');
 end
 
 %% plot control-subtracted posterior averages

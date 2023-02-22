@@ -14,8 +14,6 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
     features = cell2mat(features);
     X_mus = nan(n_timepoints,n_features);
     P_Xt = nan(n_timepoints,n_features,opt.n_xpoints);
-    P_Xt_med = nan(n_timepoints,n_features,opt.n_xpoints);
-    P_Xt_counts = nan(n_timepoints,n_features,opt.n_xpoints);
     P_tX = nan(n_timepoints,n_timepoints,opt.test.n_trials);
     P_tX_chance = zeros(n_timepoints,n_timepoints,opt.test.n_trials);
     pthat.mode = nan(n_timepoints,opt.test.n_trials);
@@ -102,36 +100,23 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
             % store average empirical joint distribution
             P_Xt(:,ff,:) = ...
                 nanconv2(squeeze(nanmean(X_counts,2)),x_kernel,x_kernel);
-        
-            %%
-%             Z = squeeze(nanmean(X_counts,2));
-%             [X,Y] = meshgrid(1:opt.n_xpoints,1:n_timepoints); 
-%             tic
-%             f = fit([X(:),Y(:)],Z(:),'lowess',...
-%                 'robust','lar');
-%             toc
-%             plot(f,[X(:) Y(:)],Z(:))
         end
         
         % zero fix (to prevent -inf issues when "logging" afterwards)
-        P_Xt_min = min(squeeze(P_Xt(:,ff,:)),[],1);
-        epsilon = min(P_Xt_min(P_Xt_min>0),[],'all');
-        P_Xt(:,ff,:) = P_Xt(:,ff,:) + epsilon;
+        P_Xt(:,ff,:) = P_Xt(:,ff,:) + realmin;
         
         % update feature
         features(ff).x_mu = X_mus(:,ff);
         features(ff).p_Xc = squeeze(P_Xt(:,ff,:));
     end
     
-    %%
+    % for numerical reasons
     log_P_Xt = log(P_Xt);
     
     %% prior definition
-    
-    %
     p_t = ones(n_timepoints,1) / n_timepoints;
     
-    %
+    % for numerical reasons
     log_p_t = log(p_t);
     
     %% construct posteriors
@@ -153,10 +138,8 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
             end
             
             % compute posterior for the current time point
-%             p_tX = decode(...
-%                 x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints);
             p_tX = decode(...
-                x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints);
+                x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints);
             
             % store posterior
             P_tX(tt,:,kk) = p_tX;
@@ -229,7 +212,7 @@ function [P_tX,P_Xt,pthat,features,log_P_Xt_shuff,P_tX_chance] = ...
 
                 % compute posterior for the current time point
                 p_tX = decode(...
-                    x,X_edges,P_Xt_shuff,log_P_Xt_shuff,log_p_t,n_features,n_timepoints);
+                    x,X_edges,log_P_Xt_shuff,log_p_t,n_features,n_timepoints);
                 
 %                 if ismember(tt,[50,100,200,300,400])
 %                     p_tX2 = decode(...
@@ -254,20 +237,18 @@ function mdl = train(X,opt)
 
 end
 
-function p_tX = decode(x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints)
+function p_tX = decode(x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints)
 
     % index current observation
     [~,x_idcs] = min(abs(X_edges(:,1:end-1) - x),[],2);
 
     % preallocation
-    p_tx = nan(n_features,n_timepoints);
     log_p_tx = nan(n_features,n_timepoints);
 
     % iterate through features
     for ff = 1 : n_features
 
         % assume empirical encoding model
-        p_tx(ff,:) = P_Xt(:,ff,x_idcs(ff));
         log_p_tx(ff,:) = log_P_Xt(:,ff,x_idcs(ff));
     end
     
@@ -276,20 +257,7 @@ function p_tX = decode(x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints)
     if all(nan_flags)
         return;
     end
-    
-    % inf check
-    inf_flags = isinf(log_p_tx);
-    log_p_tx(inf_flags) = nan;
-    
-%     % normalization
-% %     log_p_tx = log_p_tx - nanmax(log_p_tx,[],2);
-% %     log_p_tx = log_p_tx ./ abs(nanmin(log_p_tx,[],2));
-%     p_tx = p_tx ./ nansum(p_tx,2);
-%     log_p_tx2 = log(p_tx);
-%     if ~all(log_p_tx == log_p_tx2);
-%         a=1
-%     end
-    
+
     % compute posterior by summing over log-likelihoods
     log_p_tX = log_p_t + sum(log_p_tx(~nan_flags,:))';
     
@@ -299,7 +267,7 @@ function p_tX = decode(x,X_edges,P_Xt,log_P_Xt,log_p_t,n_features,n_timepoints)
     % normalization
     p_tX = p_tX / nansum(p_tX);
     
-%     if any(isnan(p_tX))
-%         a=1
-%     end
+    if any(isnan(p_tX))
+        a=1
+    end
 end
