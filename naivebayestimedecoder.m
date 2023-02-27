@@ -65,7 +65,7 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
         X_mus(:,ff) = nanmean(x(:,opt.train.trial_idcs),2);
         
         % kernel definition
-        x_kernel = normpdf(x_edges,mean(x_bounds),x_bw);
+        x_kernel = normpdf(x_edges,mean(x_bounds),x_bw*2);
         x_kernel = x_kernel / nansum(x_kernel);
         
         % compute joint distribution
@@ -195,7 +195,7 @@ function p_tX = decode(x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints)
     % normalization
     p_tX = p_tX / nansum(p_tX);
     
-    if any(isnan(p_tX))
-        a=1
-    end
+%     if any(isnan(p_tX))
+%         a=1
+%     end
 end
