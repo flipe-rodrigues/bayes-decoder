@@ -101,7 +101,12 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
         end
         
         % zero fix (to prevent -inf issues when "logging" afterwards)
-        P_Xt(:,ff,:) = P_Xt(:,ff,:) + realmin;
+        if any(P_Xt(:,ff,:) == 0,'all')
+            P_Xt(:,ff,:) = P_Xt(:,ff,:) + realmin;
+        end
+        
+        % normalization
+%         P_Xt(:,ff,:) = P_Xt(:,ff,:) ./ nansum(P_Xt(:,ff,:),3);
         
         % update feature
         features(ff).x_mu = X_mus(:,ff);
@@ -138,7 +143,7 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
             % compute posterior for the current time point
             p_tX = decode(...
                 x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints);
-            
+
             % store posterior
             P_tX(tt,:,kk) = p_tX;
         end

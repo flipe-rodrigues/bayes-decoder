@@ -159,7 +159,7 @@ drawnow;
 % preallocation
 R = nan(T,N,K);
 
-% intantiate single trial rates
+% instantiate single trial rates
 for nn = 1 : N
     progressreport(nn,N,'convolving spike trains');
     for kk = 1 : K
@@ -176,32 +176,59 @@ end
 % offset
 R = R - min(R,[],'all');
 
-%% choice of average function
+%% average spike rates within condition
+figure;
+set(gca,...
+    'xlim',[ti,tf],...
+    'ycolor','none',...
+    'nextplot','add',...
+    'plotboxaspectratio',[10,N,1]);
+xlabel('time (a.u.)');
 
-% median & inter-quartile range
-avgfun = @(x,d) nanmedian(x,d);
-errfun = @(x,d) quantile(x,[.25,.75],d) - nanmedian(x,d);
+% preallocation
+r = nan(T,N,C+1);
 
-%
-% avgfun = @(x,d) nanmean(x,d);
+% iterate through conditions
+for cc = 1 : C
+    condition_flags = y == cc;
+    condition_idcs = trial_idcs(condition_flags);
+    n_flagged_trials = sum(condition_flags);
+    
+    % compute condition mean
+    if condition_set(cc) == 1
+        train_idcs = condition_idcs(...
+            randperm(n_flagged_trials,round(n_flagged_trials/2)));
+        test_idcs = condition_idcs(...
+            ~ismember(condition_idcs,train_idcs));
+        r(:,:,C+1) = nanmean(R(:,:,train_idcs),3);
+    else
+        test_idcs = condition_idcs;
+    end
+    r(:,:,cc) = nanmean(R(:,:,test_idcs),3);
+    
+    % plot condition mean
+    plot(t,r(:,:,cc)+(1:N)*fr_mod*10,...
+        'color',clrs(cc,:),...
+        'linewidth',1);
+end
+
+% plot condition means
+title('condition-split average activity');
+drawnow;
 
 %% naive bayes decoder
 opt = struct();
 opt.n_xpoints = 100;
 opt.time = t;
-opt.train.trial_idcs = randsample(ctrl_idcs,n_ctrl_trials/2);
+opt.train.trial_idcs = C + 1;
 opt.train.n_trials = numel(opt.train.trial_idcs);
-opt.test.trial_idcs = trial_idcs(...
-    ~ismember(trial_idcs,opt.train.trial_idcs));
+opt.test.trial_idcs = 1 : C;
 opt.test.n_trials = numel(opt.test.trial_idcs);
-opt.prior = 1;
-opt.shuffle = 1;
-opt.n_shuffles = 1;
-opt.assumepoissonmdl = false;
+opt.assumepoissonmdl = true;
 opt.verbose = true;
 
 tic
-[P_tR,P_Rt,pthat,neurons] = naivebayestimedecoder(R,opt);
+[P_tR,P_Rt,pthat,neurons] = naivebayestimedecoder(r,opt);
 toc
 
 %% plot encoding models
@@ -241,75 +268,6 @@ for nn = 1 : N
 end
 close;
 
-%% plot example single-trial posteriors
-figure;
-set(gca,...
-    'xlim',[t(1),t(end)],...
-    'ylim',[t(1),t(end)],...
-    'xtick',unique([0,ti,tf,stimulus.set]),...
-    'ytick',unique([0,ti,tf,stimulus.set]),...
-    'xticklabel',num2cell(unique([0,ti,tf,stimulus.set]*stimulus.scaling/1e3)),...
-    'yticklabel',num2cell(unique([0,ti,tf,stimulus.set]*stimulus.scaling/1e3)),...
-    'xdir','normal',...
-    'ydir','normal',...
-    'nextplot','add',...
-    'plotboxaspectratio',[1,1,1]);
-xlabel('real time (a.u.)');
-ylabel('decoded time (a.u.)');
-
-% iterate through trials
-clims = quantile(P_tR(:),[0,1]);
-for kk = randperm(opt.test.n_trials,100)
-    cla;
-    title(sprintf('trial: %i, stimulus: %.2f, condition: %.2f',...
-        opt.test.trial_idcs(kk),...
-        stimuli(opt.test.trial_idcs(kk)),...
-        condition_set(y(opt.test.trial_idcs(kk)))));
-    p_tR = squeeze(P_tR(:,:,kk));
-    p_tR(isnan(p_tR)) = max([clims,max(p_tR(:))]);
-    imagesc([t(1),t(end)],[t(1),t(end)],p_tR',clims);
-    plot([1,1]*stimuli(opt.test.trial_idcs(kk)),ylim,'--w');
-    pause(.1);
-    drawnow;
-end
-close;
-
-%% plot stimulus-split posterior averages for control trials
-figure(...
-    'name','stimulus-split posterior averages (control)',...
-    'numbertitle','off',...
-    'windowstyle','docked');
-sps = gobjects(stimulus.n,1);
-for ii = 1 : stimulus.n
-    sps(ii) = subplot(2,stimulus.n/2,ii);
-    xlabel(sps(ii),'real time (a.u.)');
-    ylabel(sps(ii),'decoded time (a.u.)');
-end
-set(sps,...
-    'xlim',[t(1),t(end)],...
-    'ylim',[t(1),t(end)],...
-    'xdir','normal',...
-    'ydir','normal',...
-    'nextplot','add',...
-    'plotboxaspectratio',[1,1,1]);
-linkaxes(sps);
-
-% iterate through stimuli
-clims = quantile(P_tR(:),[0,.99]);
-for ii = 1 : stimulus.n
-    title(sps(ii),sprintf('%.2f s',stimulus.set(ii)));
-    stimulus_flags = stimuli == stimulus.set(ii);
-    trial_flags = ...
-        ctrl_flags(opt.test.trial_idcs)' & ...
-        stimulus_flags(opt.test.trial_idcs);
-    p_stim = avgfun(P_tR(:,:,trial_flags),3);
-    nan_flags = isnan(p_stim);
-    p_stim(nan_flags) = max([clims,max(p_stim,[],[1,2])]);
-    imagesc(sps(ii),[t(1),t(end)],[t(1),t(end)],p_stim',clims);
-    plot(sps(ii),xlim(sps(ii)),ylim(sps(ii)),'-k');
-    plot(sps(ii),xlim(sps(ii)),ylim(sps(ii)),'--w');
-end
-
 %% plot condition-split posterior averages
 figure(...
     'name','condition-split posterior averages',...
@@ -341,7 +299,7 @@ for cc = 1 : C
     
     %
     title(sps(1,cc),sprintf('condition: %.2f',condition_set(cc)));
-    p_cond = avgfun(P_tR(:,:,y(opt.test.trial_idcs)==cc),3);
+    p_cond = P_tR(:,:,cc);
     imagesc(sps(1,cc),[t(1),t(end)],[t(1),t(end)],p_cond',clims);
     plot(sps(1,cc),xlim(sps(1,cc)),ylim(sps(1,cc)),'-k');
     plot(sps(1,cc),xlim(sps(1,cc)),ylim(sps(1,cc)),'--w');
@@ -384,12 +342,12 @@ set(sps,...
 linkaxes(sps);
 
 % compute control mean
-p_ctrl = avgfun(P_tR(:,:,ctrl_flags(opt.test.trial_idcs)),3);
+p_ctrl = P_tR(:,:,condition_set == 1);
 
 % iterate through conditions
 for cc = 1 : C
     title(sps(cc),sprintf('condition: %.2f - ctrl',condition_set(cc)));
-    p_cond = avgfun(P_tR(:,:,y(opt.test.trial_idcs)==cc),3);
+    p_cond = P_tR(:,:,cc);
     p_diff = p_cond - p_ctrl;
     imagesc(sps(cc),[t(1),t(end)],[t(1),t(end)],p_diff',[-1,1]*C/T);
     plot(sps(cc),xlim(sps(cc)),ylim(sps(cc)),'-k');
@@ -430,32 +388,22 @@ set(sps,...
     'nextplot','add',...
     'ticklength',[1,1]*.025,...
     'nextplot','add',...
-    'plotboxaspectratio',[3,1,1]);
+    'plotboxaspectratio',[10,1,1]);
 set(sps(1:end-1),...
     'xcolor','none');
 linkaxes(sps,'x');
 
-% graphical object preallocation
-p = gobjects(n_slices,C);
-
 % iterate through conditions
 [~,cond_idcs] = sort(abs(condition_set-1),'descend');
 for cc = cond_idcs
-    p_avg = avgfun(P_tR(:,:,y(opt.test.trial_idcs)==cc),3);
-    p_err = errfun(P_tR(:,:,y(opt.test.trial_idcs)==cc),3);
-    
+    p_slice = P_tR(:,:,cc);
+
     % iterate through slices
     for ii = 1 : n_slices
         slice_idx = find(t >= slices(ii),1);
         
         % plot posterior slice
-        xpatch = [t,fliplr(t)];
-        ypatch = [p_avg(slice_idx,:) + p_err(slice_idx,:,1),...
-            fliplr(p_avg(slice_idx,:) + p_err(slice_idx,:,2))];
-        p(ii,cc) = patch(sps(ii),xpatch,ypatch,clrs(cc,:),...
-            'edgecolor','none',...
-            'facealpha',.25);
-        plot(sps(ii),t,p_avg(slice_idx,:),...
+        plot(sps(ii),t,p_slice(slice_idx,:),...
             'color',clrs(cc,:),...
             'linewidth',1.5);
     end
@@ -463,9 +411,6 @@ end
 
 % iterate through slices
 for ii = 1 : n_slices
-    
-    % ui restacking
-    uistack(p(ii,:),'bottom');
     
     % update axes
     set(sps(ii),...
@@ -480,74 +425,6 @@ for ii = 1 : n_slices
         'markersize',10,...
         'markerfacecolor','k',...
         'markeredgecolor','none');
-end
-
-%% plot point estimates
-
-% iterate through point estimate types
-pthat_types = fieldnames(pthat);
-n_pthats = numel(pthat_types);
-for tt = 1 : n_pthats
-    type = pthat_types{tt};
-    
-    % figure initialization
-    figure(...
-        'name',sprintf('point estimates (%s)',type),...
-        'numbertitle','off',...
-        'windowstyle','docked');
-    sps = gobjects(stimulus.n,1);
-    for ii = 1 : stimulus.n
-        sps(ii) = subplot(2,stimulus.n/2,ii);
-        xlabel(sps(ii),'real time (s)');
-        ylabel(sps(ii),'decoded time (s)');
-    end
-    set(sps,...
-        'xlim',[0,stimulus.set(end)]+[-1,1]*.05*range(stimulus.set),...
-        'ylim',[0,stimulus.set(end)]+[-1,1]*.05*range(stimulus.set),...
-        'xdir','normal',...
-        'ydir','normal',...
-        'nextplot','add',...
-        'plotboxaspectratio',[1,1,1]);
-    linkaxes(sps);
-    
-    % iterate through stimuli
-    for ii = 1 : stimulus.n
-        title(sps(ii),sprintf('stimulus: %.2f s',...
-            stimulus.set(ii)*stimulus.scaling/1e3));
-        stimulus_flags = stimuli == stimulus.set(ii);
-        stimperiod_flags = t >= 0 & t < stimulus.set(ii);
-        
-        % identity line
-        plot(sps(ii),xlim,ylim,'--k');
-        
-        % iterate through conditions
-        for cc = 1 : C
-            condition_flags = y == cc;
-            trial_flags = ...
-                stimulus_flags(opt.test.trial_idcs) & ...
-                condition_flags(opt.test.trial_idcs);
-            
-            % compute measures of central tendency & dispersion
-            pthat_avg = nanmedian(pthat.(type)(:,trial_flags),2);
-            pthat_err = quantile(pthat.(type)(:,trial_flags),[.25,.75],2);
-            
-            % plot measure of dispersion
-            xpatch = [t(stimperiod_flags),...
-                fliplr(t(stimperiod_flags))];
-            ypatch = [pthat_err(stimperiod_flags,1);...
-                flipud(pthat_err(stimperiod_flags,2))];
-            patch(sps(ii),xpatch,ypatch,clrs(cc,:),...
-                'facecolor',clrs(cc,:),...
-                'edgecolor','none',...
-                'facealpha',.25);
-            
-            % plot measure of central tendency
-            plot(sps(ii),t(stimperiod_flags),...
-                pthat_avg(stimperiod_flags),...
-                'color',clrs(cc,:),...
-                'linewidth',1.5);
-        end
-    end
 end
 
 %% plot point estimate point-dropping averages
@@ -589,23 +466,9 @@ stimperiod_flags = t >= 0 & t < stimulus.set(end);
 
 % iterate through conditions
 for cc = 1 : C
-    condition_flags = y == cc;
-    trial_flags = ...
-        condition_flags(opt.test.trial_idcs);
     
     % compute measures of central tendency & dispersion
-    pthat_avg = nanmedian(pthat.(type)(:,trial_flags),2);
-    pthat_err = quantile(pthat.(type)(:,trial_flags),[0,1]+[1,-1]*.25,2);
-    
-    % plot measure of dispersion
-    xpatch = [t(stimperiod_flags),...
-        fliplr(t(stimperiod_flags))];
-    ypatch = [pthat_err(stimperiod_flags,1);...
-        flipud(pthat_err(stimperiod_flags,2))];
-    patch(xpatch,ypatch,clrs(cc,:),...
-        'facecolor',clrs(cc,:),...
-        'edgecolor','none',...
-        'facealpha',.25);
+    pthat_avg = pthat.(type)(:,cc);
     
     % plot measure of central tendency
     plot(t,pthat_avg,...
