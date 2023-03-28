@@ -104,10 +104,7 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
         if any(P_Xt(:,ff,:) == 0,'all')
             P_Xt(:,ff,:) = P_Xt(:,ff,:) + realmin;
         end
-        
-        % normalization
-%         P_Xt(:,ff,:) = P_Xt(:,ff,:) ./ nansum(P_Xt(:,ff,:),3);
-        
+
         % update feature
         features(ff).x_mu = X_mus(:,ff);
         features(ff).p_Xc = squeeze(P_Xt(:,ff,:));
@@ -200,7 +197,7 @@ function p_tX = decode(x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints)
     % normalization
     p_tX = p_tX / nansum(p_tX);
     
-%     if any(isnan(p_tX))
-%         a=1
-%     end
+    if any(isnan(p_tX))
+        a=1
+    end
 end
