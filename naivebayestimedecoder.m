@@ -20,7 +20,7 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
 
     %% overwrite MATLAB's builtin definition for the poisson PDF
     poisspdf = @(lambda,k) ...
-        exp(k .* log(lambda + 1e-100) - lambda - gammaln(k + 1));
+        exp(k .* log(lambda + realmin) - lambda - gammaln(k + 1));
 
     %% estimate feature supports
 
@@ -65,7 +65,7 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
         X_mus(:,ff) = nanmean(x(:,opt.train.trial_idcs),2);
         
         % kernel definition
-        x_kernel = normpdf(x_edges,mean(x_bounds),x_bw*2);
+        x_kernel = normpdf(x_edges,mean(x_bounds),x_bw);
         x_kernel = x_kernel / nansum(x_kernel);
         
         % compute joint distribution
@@ -73,6 +73,9 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
             
             % store theoretical joint distribution
             P_Xt(:,ff,:) = poisspdf(X_mus(:,ff),x_edges(1:end-1));
+        
+            % temporal smoothing (acts as regularization)
+%             P_Xt(:,ff,:) = nanconv2(squeeze(P_Xt(:,ff,:)),opt.t_kernel.pdf,1);
         else
             
             % preallocation
@@ -96,15 +99,36 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
             end
             
             % store average empirical joint distribution
-            P_Xt(:,ff,:) = ...
-                nanconv2(squeeze(nanmean(X_counts,2)),x_kernel,x_kernel);
+            P_Xt(:,ff,:) = nanmean(X_counts,2);
+            
+            % 2D smoothing (acts as regularization)
+            P_Xt(:,ff,:) = nanconv2(squeeze(P_Xt(:,ff,:)),x_kernel,x_kernel);
         end
+        
+%         if ff == 1
+%             figure('position',[1.8000 41.8000 1.0224e+03 1.0288e+03]);
+%         end
+%         
+%         subplot(3,1,1);
+%         plot(opt.time,X_mus(:,ff));
+%         
+% %         subplot(3,1,2);
+%         figure;
+%         imagesc(squeeze(P_Xt(:,ff,:))');
+%         set(gca,'ydir','normal');
         
         % zero fix (to prevent -inf issues when "logging" afterwards)
         if any(P_Xt(:,ff,:) == 0,'all')
             P_Xt(:,ff,:) = P_Xt(:,ff,:) + realmin;
         end
 
+%         subplot(3,1,3);
+%         imagesc(isnan(squeeze(P_Xt(:,ff,:)))');
+%         pause(.1);
+%         if any(isnan(P_Xt(:,ff,:)),'all')
+%             a=1
+%         end
+        
         % update feature
         features(ff).x_mu = X_mus(:,ff);
         features(ff).p_Xc = squeeze(P_Xt(:,ff,:));
@@ -198,6 +222,7 @@ function p_tX = decode(x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints)
     p_tX = p_tX / nansum(p_tX);
     
     if any(isnan(p_tX))
-        a=1
+%         figure; plot(p_tX);
+%         a=1
     end
 end

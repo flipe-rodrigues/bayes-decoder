@@ -10,124 +10,96 @@ rng(0);
 %% tensor settings
 T = 500;    % time points
 N = 15;     % neurons
-K = 1e3;    % trials
+K = 200;    % trials
 
 %% trial settings
 trial_idcs = 1 : K;
 
-%% stimulus settings
-stimulus.scaling = 3e3;
-stimulus.boundary = .5;
-stimulus.set = [.2, .35, .46, .54, .65, .8];
-stimulus.n = numel(stimulus.set);
-stimuli = sort(stimulus.set(randi(stimulus.n,K,1)))';
-
 %% time settings
-ti = -stimulus.set(1);
-tf = stimulus.set(end);
+ti = 0;
+tf = 5;
 t = linspace(ti,tf,T);
 dt = diff(t(1:2));
+dur = tf - ti;
+
+%% epoch settings
+E = 5;
+epoch_times = linspace(ti,tf,E+1);
+epoch_levels = cumsum((rand(E,N) >= .5) * 2 - 1);
+epoch_mask = rand(E,1) >= .5;
 
 %% condition settings
-condition_set = 1 + [3, 1.5, 0, -1] * .05;
-C = numel(condition_set);
-y = sum(rand(K,1) > (0 : C-1) / C, 2);
-ctrl_flags = condition_set(y) == 1;
-ctrl_idcs = find(ctrl_flags);
-n_ctrl_trials = numel(ctrl_idcs);
-
-%% speed sampling
-gain_mods = nan(K,1);
-offset_mods = nan(K,1);
-scaling_mods = nan(K,1);
-mod_sig = .05;
-for kk = 1 : K
-    gain_mods(kk) = 1 / normrnd(condition_set(y(kk)),mod_sig);
-    offset_mods(kk) = -abs(1 - normrnd(condition_set(y(kk)),mod_sig)) * 15;
-    scaling_mods(kk) = normrnd(condition_set(y(kk)),mod_sig);
-end
+C = 2;
+condition = sum(rand(K,1) > (0 : C-1) / C, 2);
 
 %% color settings
-warm_clr = [.85,.1,.25];
-cool_clr = [.15,.85,.9];
-ctrl_clr = [1,1,1] * 0;
-n_warm = sum(condition_set < 1);
-n_cold = sum(condition_set > 1);
-clrs = flipud(unique([...
-    linspace(warm_clr(1),ctrl_clr(1),n_warm+1),...
-    linspace(ctrl_clr(1),cool_clr(1),n_cold+1);...
-    linspace(warm_clr(2),ctrl_clr(2),n_warm+1),...
-    linspace(ctrl_clr(2),cool_clr(2),n_cold+1);...
-    linspace(warm_clr(3),ctrl_clr(3),n_warm+1),...
-    linspace(ctrl_clr(3),cool_clr(3),n_cold+1);...
-    ]','rows','stable'));
+clrs = cool(C);
+
+%% modulation sampling
+gains = normrnd(0,1,N,C);
 
 %% temporal smoothing settings
 peakx = 25 / 1e3;
 kernel = gammakernel('peakx',peakx,'binwidth',dt);
-t_padded = ti + kernel.paddx(1) : dt : tf + kernel.paddx(end) + dt;
-T_padded = numel(t_padded);
 
-%% generate fake data
+%% sample generative rates
 
 % preallocation
-X_padded = nan(T_padded,N,K);
+X = zeros(T,N,K);
 spiketimes = cell(N,K);
 neuron_ids = cell(N,K);
 
 % rate settings
-fr_mod = 15;
-mus = linspace(0,1,N) * tf * .5;
-sig0 = .035 * tf;
-web = .05 * 1;
+fr_mod = 10;
 
 % intantiate single trial rates
 for nn = 1 : N
     progressreport(nn,N,'generating rate data');
-    for kk = 1 : K
-        t_flags = t_padded <= stimuli(kk) + dt;
-        mu = mus(nn) * scaling_mods(kk);
-        sig = sig0 + mu * web;
-        X_padded(:,nn,kk) = ...
-            offset_mods(kk) + gain_mods(kk) * normpdf(t_padded,mu,sig)';
+    
+    % iterate through epochs
+    for ee = 1 : E
+        epoch_flags = ...
+            t >= epoch_times(ee) & ...
+            t < epoch_times(ee + 1);
+        if sum(epoch_flags) == 0
+            continue;
+        end
+        if rand >= .5
+            starting_point = X(find(epoch_flags,1));
+        else
+            starting_point = epoch_levels(ee);
+        end
+        X(epoch_flags,nn,:) = repmat(linspace(...
+            starting_point,epoch_levels(ee),sum(epoch_flags)),K,1)';
+    end
+    
+    % iterate through conditions
+    for cc = 1 : C
+        condition_flags = condition == cc;
+        % epoch mask!!!!!!!!!
+        X(:,nn,condition_flags) = X(:,nn,condition_flags) .* gains(nn,cc);
     end
 end
-X_padded = (X_padded - min(X_padded,[],[1,3]) + 1e-6) * fr_mod;
-X = X_padded(t_padded >= ti & t_padded <= tf + dt,:,:);
+
+% normalization
+X = (X - min(X,[],[1,3]) + 1e-6) * fr_mod;
+
+%% sample spike times
 
 % instantiate spike trains
 for nn = 1 : N
     progressreport(nn,N,'generating spike data');
     for kk = 1 : K
-        t_flags = t_padded <= stimuli(kk);
-        lambda = X_padded(t_flags,nn,kk);
-        dur = min(stimuli(kk),tf) - ti - kernel.paddx(1);
+        lambda = X(:,nn,kk);
         [n,ts] = poissonprocess(lambda,dur);
-        spiketimes{nn,kk} = ts + ti + kernel.paddx(1);
+        spiketimes{nn,kk} = ts + ti;
         neuron_ids{nn,kk} = repmat(nn,n,1);
     end
 end
 
-%% plot example single-trials
-figure;
-set(gca,...
-    'xlim',[ti,tf],...
-    'ycolor','none',...
-    'nextplot','add',...
-    'plotboxaspectratio',[10,N,1]);
-xlabel('time (a.u.)');
-
-% iterate through trials
-for kk = ctrl_idcs(randperm(sum(ctrl_flags),10))
-    title(sprintf('trial: %i, condition: %i',kk,y(kk)));
-    plot(t,X(:,:,kk)+(1:N)*fr_mod*10,...
-        'color',clrs(y(kk),:),...
-        'linewidth',.1);
-    drawnow;
-end
-
 %% plot condition-split averages
-figure;
+figure(...
+    'position',[1.0258e+03 41.8000 1.0224e+03 1.0288e+03]);
 set(gca,...
     'xlim',[ti,tf],...
     'ycolor','none',...
@@ -142,7 +114,7 @@ x = nan(T,N,C);
 for cc = 1 : C
     
     % compute condition mean
-    x(:,:,cc) = nanmean(X(:,:,y==cc),3);
+    x(:,:,cc) = nanmean(X(:,:,condition==cc),3);
     
     % plot condition mean
     plot(t,x(:,:,cc)+(1:N)*fr_mod*10,...
@@ -163,13 +135,11 @@ R = nan(T,N,K);
 for nn = 1 : N
     progressreport(nn,N,'convolving spike trains');
     for kk = 1 : K
-        t_flags = t <= stimuli(kk);
         spks = spiketimes{nn,kk};
-        spk_counts = histcounts(spks,'binedges',t_padded);
+        spk_counts = histcounts(spks,'binedges',[t,t(end)+dt]);
         spk_counts = spk_counts / dt;
-        spk_rate = conv(spk_counts,kernel.pdf,'valid');
-        R(t_flags,nn,kk) = spk_rate(t_flags) - ...
-            nanmean(x(:,nn,y(kk))); % !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        spk_rate = nanconv2(spk_counts,1,kernel.pdf);
+        R(:,nn,kk) = spk_rate;
     end
 end
 
@@ -186,25 +156,16 @@ set(gca,...
 xlabel('time (a.u.)');
 
 % preallocation
-r = nan(T,N,C+1);
+r = nan(T,N,C);
 
 % iterate through conditions
 for cc = 1 : C
-    condition_flags = y == cc;
+    condition_flags = condition == cc;
     condition_idcs = trial_idcs(condition_flags);
     n_flagged_trials = sum(condition_flags);
     
     % compute condition mean
-    if condition_set(cc) == 1
-        train_idcs = condition_idcs(...
-            randperm(n_flagged_trials,round(n_flagged_trials/2)));
-        test_idcs = condition_idcs(...
-            ~ismember(condition_idcs,train_idcs));
-        r(:,:,C+1) = nanmean(R(:,:,train_idcs),3);
-    else
-        test_idcs = condition_idcs;
-    end
-    r(:,:,cc) = nanmean(R(:,:,test_idcs),3);
+    r(:,:,cc) = nanmean(R(:,:,condition_idcs),3);
     
     % plot condition mean
     plot(t,r(:,:,cc)+(1:N)*fr_mod*10,...
@@ -306,7 +267,7 @@ for cc = 1 : C
     
     %
     title(sps(2,cc),sprintf('condition: %.2f',condition_set(cc)));
-%     p_chance = avgfun(P_tR_chance(:,:,y(opt.test.trial_idcs)==cc),3);
+    %     p_chance = avgfun(P_tR_chance(:,:,y(opt.test.trial_idcs)==cc),3);
     p_chance = nanmean(p_cond,1);
     imagesc(sps(2,cc),[t(1),t(end)],[t(1),t(end)],p_chance',clims);
     plot(sps(2,cc),xlim(sps(2,cc)),ylim(sps(2,cc)),'-k');
@@ -315,7 +276,7 @@ for cc = 1 : C
     %
     title(sps(3,cc),sprintf('condition: %.2f',condition_set(cc)));
     p_diff = p_cond - p_chance;
-%     p_diff(p_diff < 0) = 0;
+    %     p_diff(p_diff < 0) = 0;
     imagesc(sps(3,cc),[t(1),t(end)],[t(1),t(end)],p_diff');
     plot(sps(3,cc),xlim(sps(3,cc)),ylim(sps(3,cc)),'-k');
     plot(sps(3,cc),xlim(sps(3,cc)),ylim(sps(3,cc)),'--w');
@@ -436,7 +397,7 @@ arrayfun(@(ax)ylabel(ax,'P(t|R)'),sps);
 [~,cond_idcs] = sort(abs(condition_set-1),'descend');
 for cc = cond_idcs
     p_slice = P_tR(:,:,cc);
-
+    
     % iterate through slices
     for ii = 1 : n_slices
         slice_idx = find(t >= slices(ii),1);
@@ -454,7 +415,7 @@ ylim([0,max(ylim)] + [0,-1] * .25 * max(ylim));
 
 % iterate through slices
 for ii = 1 : n_slices
-
+    
     % plot real time
     slice_idx = find(t >= slices(ii),1);
     plot(sps(ii),min(xlim),0,...
@@ -466,13 +427,13 @@ end
 
 % % iterate through slices
 % for ii = 1 : n_slices
-%     
+%
 %     % update axes
 %     set(sps(ii),...
 %         'ylim',[0,max(ylim(sps(ii)))] + [0,1] * .15 * max(ylim(sps(ii))),...
 %         'ytick',0,...
 %         'yticklabel','0');
-%     
+%
 %     % plot real time
 %     slice_idx = find(t >= slices(ii),1);
 %     plot(sps(ii),t(slice_idx),max(ylim(sps(ii))),...
@@ -565,9 +526,9 @@ I = eye(3);
 for ii = 1 : 3
     w_idcs = (1:w/3) + (ii-1) * w/3;
     h_idcs = (1:h/3) + (ii-1) * h/3;
-    for jj = w_idcs
+    for ee = w_idcs
         for kk = h_idcs
-            P1(jj,kk,:) = I(ii,:);
+            P1(ee,kk,:) = I(ii,:);
         end
     end
 end
