@@ -217,7 +217,7 @@ for ee = 1 : E
     for cc = 1 %: C
         
         % response variable
-        response = condition == cc;
+        response = condition; % == cc;
         
         % iterate through trials
         for kk = 1 : K
@@ -233,7 +233,7 @@ for ee = 1 : E
 %             mdl = fitcdiscr(design(train_flags,:),response(train_flags),...
 %                 'discrimtype','linear');
             mdl = fitcecoc(design(train_flags,:),condition(train_flags),...
-                'learners','discriminant',...
+                'learners','svm',...
                 'coding','onevsall');
             
             % prediction with test trial
