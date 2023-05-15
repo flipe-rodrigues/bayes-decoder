@@ -10,9 +10,9 @@ rng(0);
 %% tensor settings
 T = 500;    % time points
 N = 16;     % neurons
-K = 200;    % trials
+K = 250;    % trials
 E = 10;     % epochs
-C = 3;      % conditions
+C = 7;      % conditions
 
 %% trial settings
 trial_idcs = 1 : K;
@@ -37,6 +37,16 @@ clrs = cool(C);
 
 %% modulation sampling
 gains = normrnd(0,1,N,C);
+
+% iterate through neurons
+for nn = 1 : N
+    if rand >= .5
+        direction = 'ascend';
+    else
+        direction = 'descend';
+    end
+    gains(nn,:) = sort(gains(nn,:),direction);
+end
 
 %% temporal smoothing settings
 peakx = 25 / 1e3;
@@ -202,7 +212,7 @@ end
 performance = nan(E,C,K);
 
 % spike integration window
-spk_win = .5;
+spk_win = min(.5,min(diff(epoch_times)));
 
 % iterate through epochs
 for ee = 1 : E
@@ -212,7 +222,7 @@ for ee = 1 : E
     
     % design matrix
     design = squeeze(sum(counts(t_flags,:,:)))';
-
+    
     % iterate through conditions
     for cc = 1 %: C
         
@@ -230,8 +240,8 @@ for ee = 1 : E
             shuffled_idcs = train_idcs(randperm(K-1));
             
             % linear discriminant analysis
-%             mdl = fitcdiscr(design(train_flags,:),response(train_flags),...
-%                 'discrimtype','linear');
+            %             mdl = fitcdiscr(design(train_flags,:),response(train_flags),...
+            %                 'discrimtype','linear');
             mdl = fitcecoc(design(train_flags,:),condition(train_flags),...
                 'learners','svm',...
                 'coding','onevsall');
@@ -278,7 +288,7 @@ plot(xlim,[1,1]*1/C,'-k',...
 
 % iterate through epochs
 for ee = 1 : E
-
+    
     % patch epoch
     xpatch = [ee,ee+1,ee+1,ee] - 1/2;
     ypatch = sort([ylim,ylim]);
@@ -290,15 +300,26 @@ for ee = 1 : E
     plot([1,1]*ee+1/2,ylim,...
         'color','k',...
         'linestyle','--');
-
+    
     % iterate through conditions
     for cc = 1 : C
         condition_flags = condition == cc;
-        plot(ee,nanmean(performance(ee,cc,:)),...
+        
+        %
+        plot(ee,nanmean(performance(ee,1,condition_flags)),...
             'marker','o',...
             'markersize',7.5,...
             'markerfacecolor',clrs(cc,:),...
-            'markeredgecolor','k',...
+            'markeredgecolor','w',...
             'linewidth',1.5);
     end
 end
+
+%
+plot(1:E,nanmean(performance(:,1,:),3),...
+    'color','k',...
+    'marker','o',...
+    'markersize',10,...
+    'markerfacecolor','k',...
+    'markeredgecolor','w',...
+    'linewidth',1.5);
