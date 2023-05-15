@@ -221,7 +221,7 @@ for ee = 1 : E
         t < epoch_times(ee) + spk_win;
     
     % design matrix
-    design = squeeze(sum(counts(t_flags,:,:)))';
+    design = squeeze(sum(rates_hat(t_flags,:,:)))';
     
     % iterate through conditions
     for cc = 1 %: C
@@ -243,7 +243,7 @@ for ee = 1 : E
             %             mdl = fitcdiscr(design(train_flags,:),response(train_flags),...
             %                 'discrimtype','linear');
             mdl = fitcecoc(design(train_flags,:),condition(train_flags),...
-                'learners','svm',...
+                'learners','linear',...
                 'coding','onevsall');
             
             % prediction with test trial
