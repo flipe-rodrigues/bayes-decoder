@@ -283,8 +283,7 @@ xlabel('Task epoch');
 ylabel('Decoder performance (%)');
 
 % reference lines
-plot(xlim,[1,1]*1/C,'-k',...
-    'linewidth',1.5);
+plot(xlim,[1,1]*1/C,'-k');
 
 % iterate through epochs
 for ee = 1 : E
@@ -314,6 +313,20 @@ for ee = 1 : E
             'linewidth',1.5);
     end
 end
+
+% iterate through conditions
+% for cc = 1 : C
+%     condition_flags = condition == cc;
+%     
+%     %
+%     plot(1:E,nanmean(performance(:,1,condition_flags),3),...
+%         'color',clrs(cc,:),...
+%         'marker','o',...
+%         'markersize',7.5,...
+%         'markerfacecolor',clrs(cc,:),...
+%         'markeredgecolor','w',...
+%         'linewidth',1.5);
+% end
 
 %
 plot(1:E,nanmean(performance(:,1,:),3),...
