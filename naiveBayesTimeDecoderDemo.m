@@ -42,7 +42,7 @@ offset_mods = nan(K,1);
 scaling_mods = nan(K,1);
 mod_sig = .05;
 for kk = 1 : K
-    gain_mods(kk) = 1 / normrnd(condition_set(y(kk)),mod_sig);
+    gain_mods(kk) = 1 / normrnd(condition_set(y(kk)).^1,mod_sig);
     offset_mods(kk) = -abs(1 - normrnd(condition_set(y(kk)),mod_sig)) * 15;
     scaling_mods(kk) = normrnd(condition_set(y(kk)),mod_sig);
 end
