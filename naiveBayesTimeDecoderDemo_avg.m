@@ -347,7 +347,7 @@ axes(...
 xlabel('Real time (s)');
 ylabel('Decoded time (s)');
 
-P2 = mat2rgb(permute(P_tR,[2,1,3]),clrs);
+P2 = tensor2rgb(permute(P_tR,[2,1,3]),clrs);
 imagesc([t(1),t(end)],[t(1),t(end)],P2,[0,1]);
 
 % plot categeory boundary

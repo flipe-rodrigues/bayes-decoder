@@ -106,7 +106,6 @@ for nn = 1 : N
     end
 end
 
-
 %% compute average condition-split generative rates
 
 % preallocation
