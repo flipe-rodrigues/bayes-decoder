@@ -60,21 +60,24 @@ axesopt.colorbar.box = 'off';
 T = 100;    % time points
 N = 30;     % neurons
 K = 100;    % trials
-B = 10;    % bootstrap iterations
+B = 100;    % bootstrap iterations
 
 %% time settings
 ti = 0;
 tf = 1000;
-t = linspace(ti,tf,T);
+t = ti : tf;
+T = numel(t);
+% t = linspace(ti,tf,T);
 t_idcs = 1 : T;
 t_units = 1e3;
-dt = diff(t(1:2));
+dt = 75;
+% dt = diff(t(1:2));
 
 %% "ramping" criteria
 
 % "monotonocity" criteria
 rho_monotonocity_cutoff = .5;
-beta_monotonocity_cutoff = .05;
+beta_monotonocity_cutoff = .004; % .05;
 pval_monotonocity_cutoff = .05;
 
 % stereotypy criteria
@@ -109,15 +112,19 @@ for nn = 1 : 2
     for kk = 1 : K_eg
         X_eg(:,nn,kk) = generativerate(...
             t,gammas_eg(nn),mus_eg(nn),lambdas_eg(nn),sigmas_eg(nn));
-        x_padded = generativerate(...
-            t_padded,gammas_eg(nn),mus_eg(nn),lambdas_eg(nn),sigmas_eg(nn));
-        dur = tf - ti - kernel.paddx(1) + kernel.paddx(2);
-        [n,ts] = poissonprocess(x_padded,dur/t_units);
-        ts = ts * t_units;
-        spk_times = ts + ti + kernel.paddx(1);
-        spk_counts = histcounts(spk_times,'binedges',t_padded);
-        spk_counts = spk_counts / (dt/t_units);
-        R_eg(:,nn,kk) = conv(spk_counts,kernel.pdf,'valid');
+%         x_padded = generativerate(...
+%             t_padded,gammas_eg(nn),mus_eg(nn),lambdas_eg(nn),sigmas_eg(nn));
+%         dur = tf - ti - kernel.paddx(1) + kernel.paddx(2);
+%         [n,ts] = poissonprocess(x_padded,dur/t_units);
+%         spk_times = ts * t_units + ti + kernel.paddx(1);
+%         spk_counts = histcounts(spk_times,'binedges',t_padded);
+%         spk_counts = spk_counts / (dt/t_units);
+%         R_eg(:,nn,kk) = conv(spk_counts,kernel.pdf,'valid');
+%         R_eg(:,nn,kk) = spk_counts / (dt/t_units);        
+        [n,ts] = poissonprocess(X_eg(:,nn,kk),(tf-ti)/t_units);
+        spk_times = ts * t_units + ti;
+        spk_counts = histcounts(spk_times,'binedges',[t,t(end)+1]);
+        R_eg(:,nn,kk) = movsum(spk_counts,dt) / (dt/t_units);
     end
 end
 
@@ -231,8 +238,8 @@ for bb = 1 : B
     progressreport(bb,B,'bootstrapping')
     
     %% model parameters
-    gammas = exprnd(15,N,1);
-    lambdas = exprnd(.25*(tf-ti),N,1);
+    gammas = exprnd(20,N,1);
+    lambdas = exprnd(.2*(tf-ti),N,1);
     mus = linspace(ti,tf,N)';
     sigmas = repmat(.25*(tf-ti),N,1);
     
@@ -247,15 +254,18 @@ for bb = 1 : B
         for kk = 1 : K
             X(:,nn,kk) = generativerate(...
                 t,gammas(nn),mus(nn),lambdas(nn),sigmas(nn));
-            x_padded = generativerate(...
-                t_padded,gammas(nn),mus(nn),lambdas(nn),sigmas(nn));
-            dur = tf - ti - kernel.paddx(1) + kernel.paddx(2);
-            [n,ts] = poissonprocess(x_padded,dur/t_units);
-            ts = ts * t_units;
-            spk_times = ts + ti + kernel.paddx(1);
-            spk_counts = histcounts(spk_times,'binedges',t_padded);
-            spk_counts = spk_counts / (dt/t_units);
-            R(:,nn,kk) = conv(spk_counts,kernel.pdf,'valid');
+%             x_padded = generativerate(...
+%                 t_padded,gammas(nn),mus(nn),lambdas(nn),sigmas(nn));
+%             dur = tf - ti - kernel.paddx(1) + kernel.paddx(2);
+%             [n,ts] = poissonprocess(x_padded,dur/t_units);
+%             spk_times = ts * t_units + ti + kernel.paddx(1);
+%             spk_counts = histcounts(spk_times,'binedges',t_padded);
+%             spk_counts = spk_counts / (dt/t_units);
+%             R(:,nn,kk) = conv(spk_counts,kernel.pdf,'valid');
+            [n,ts] = poissonprocess(X(:,nn,kk),(tf-ti)/t_units);
+            spk_times = ts * t_units + ti;
+            spk_counts = histcounts(spk_times,'binedges',[t,t(end)+1]);
+            R(:,nn,kk) = movsum(spk_counts,dt) / (dt/t_units);
         end
     end
     
@@ -345,7 +355,7 @@ for bb = 1 : B
         monotonicity_flags & ...
         stereotypy_flags;
     
-    %     [mean(monotonicity_flags),mean(stereotypy_flags),mean(ramp_flags)]
+    [mean(monotonicity_flags),mean(stereotypy_flags),mean(ramp_flags)]
     
     % store proportion of ramping neurons
     p_ramp(bb) = nanmean(ramp_flags);
@@ -706,27 +716,27 @@ for bb = 1 : B
     for tt = 1 : T
         cla;
         plot(t,P_tR_ramp(:,tt),...
-            'color','k',...
+            'color','r',...
             'linewidth',1.5);
         plot(mu_ramp(tt),max(P_tR_ramp(:,tt)),...
-            'color','k',...
+            'color','r',...
             'marker','v',...
             'markersize',7.5,...
             'linewidth',1.5);
         plot(mu_ramp(tt)+[-1,1]*sd_ramp(tt),[1,1]*max(P_tR_ramp(:,tt)),...
-            'color','k',...
+            'color','r',...
             'linewidth',1.5);
         
         plot(t,P_tR_non(:,tt),...
-            'color','r',...
+            'color','k',...
             'linewidth',1.5);
         plot(mu_non(tt),max(P_tR_non(:,tt)),...
-            'color','r',...
+            'color','k',...
             'marker','v',...
             'markersize',7.5,...
             'linewidth',1.5);
         plot(mu_non(tt)+[-1,1]*sd_non(tt),[1,1]*max(P_tR_non(:,tt)),...
-            'color','r',...
+            'color','k',...
             'linewidth',1.5);
         
         if B == B
