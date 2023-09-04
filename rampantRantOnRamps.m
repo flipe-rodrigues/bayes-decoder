@@ -58,7 +58,7 @@ axesopt.colorbar.box = 'off';
 
 %% tensor settings
 T = 100;    % time points
-N = 300;     % neurons
+N = 30;     % neurons
 K = 100;    % trials
 B = 10;    % bootstrap iterations
 
