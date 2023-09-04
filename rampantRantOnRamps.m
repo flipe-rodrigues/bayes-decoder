@@ -58,7 +58,7 @@ axesopt.colorbar.box = 'off';
 
 %% tensor settings
 T = 100;    % time points
-N = 30;     % neurons
+N = 50;     % neurons
 K = 100;    % trials
 B = 100;    % bootstrap iterations
 
@@ -238,7 +238,7 @@ for bb = 1 : B
     progressreport(bb,B,'bootstrapping')
     
     %% model parameters
-    gammas = exprnd(20,N,1);
+    gammas = exprnd(15,N,1);
     lambdas = exprnd(.2*(tf-ti),N,1);
     mus = linspace(ti,tf,N)';
     sigmas = repmat(.25*(tf-ti),N,1);
@@ -858,12 +858,13 @@ errorbar(sps(2),t,nanmean(MU_non,2),nanstd(MU_non,0,2),...
 
 %%
 figure;
-hold on;
+axes(axesopt.default);
 xlabel('Firing rate (Hz)');
-histogram(nanmean(R,[1,3]),N/5,...
+histogram(nanmean(R,[1,3]),round(N/2),...
     'facealpha',1,...
     'edgecolor','w',...
-    'facecolor','k');
+    'facecolor','k',...
+    'linewidth',1.5);
 
 %% firing rate function
 function x = generativerate(time,gamma,mu,lambda,sigma)
