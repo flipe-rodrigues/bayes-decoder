@@ -189,6 +189,9 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
         P_tX_kk(isnan(P_tX_kk)) = 0;
         pthat.mean(test_time_flags,kk) = opt.time * P_tX_kk';
     end
+    
+    %% compute performance statistics
+    % accuracy & precision stats..
 end
 
 function p_tX = decode(x,X_edges,log_P_Xt,log_p_t,n_features,n_timepoints)
