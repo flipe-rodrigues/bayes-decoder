@@ -191,6 +191,15 @@ function [P_tX,P_Xt,pthat,features] = naivebayestimedecoder(X,opt)
     end
     
     %% compute performance statistics
+    
+    % iterate through test trials
+    for kk = 1 : opt.test.n_trials
+        if opt.verbose
+            progressreport(kk,opt.test.n_trials,'computing performance stats');
+        end
+        test_idx = opt.test.trial_idcs(kk);
+    end
+    
     % accuracy & precision stats..
 end
 
